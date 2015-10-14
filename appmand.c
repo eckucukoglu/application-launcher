@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <dbus/dbus.h>
-#include <errno.h>
-#include <sys/types.h> 
+#include <signal.h>
 #include <sys/wait.h>
 
 #define NUMBER_OF_THREADS 1
@@ -35,29 +34,68 @@ struct application {
         char* permissions;
 } application;
 
-/*
- * Infinite loop of process waits. If there are processes 
- * to wait, wait any. If not wait on the given condition 
- * variable, when signaled, redo.
- */
-void *wait_process_loop(void *targs) {
-        thread_info *tinfo = targs;
-        int rc;
-        
-        while (1) {
-                
-                /* wait for any child. */
-                
-                /* handle return code then continue */
-                
-                /* in case of erronous wait, check condition */
-                
-                rc = pthread_mutex_lock(&mutex);
-                rc = pthread_cond_wait(&child_exists, &mutex);
-                rc = pthread_mutex_unlock(&mutex);
+const char *reasonstr(int signal, int code) {
+        if (signal == SIGCHLD) {
+                switch(code) {
+                case CLD_EXITED:        return("CLD_EXITED");
+                case CLD_KILLED:        return("CLD_KILLED");
+                case CLD_DUMPED:        return("CLD_DUMPED");
+                case CLD_TRAPPED:       return("CLD_TRAPPED");
+                case CLD_STOPPED:       return("CLD_STOPPED");
+                case CLD_CONTINUED:     return("CLD_CONTINUED");
+                }
         }
+
+        return "unknown";
+}
+
+/*
+ * Request handling using dbus
+ */
+void *request_handler(void *targs) {
+        thread_info *tinfo = targs;
+        
+        /* TODO: Read application manifests from /etc/appmand */
+           
+        /* TODO: Listen and answer D-Bus method requests to run applications. */
         
         pthread_exit(NULL);
+}
+
+/*
+ * Signal handling for main process.
+ */
+void signal_handler(int signo, siginfo_t *info, void *p) {
+        int status;
+        
+        printf("signal %d received:\n"
+                "si_errno %d\n"    /* An errno value */
+                "si_code %s\n"     /* Signal code */
+                ,signo,
+                info->si_errno,
+                reasonstr(signo, info->si_code));
+
+        if (signo == SIGCHLD) {
+                printf(
+                        "si_pid %d\n"      /* Sending process ID */
+                        "si_uid %d\n",     /* Real user ID of sending process */
+                        "si_status %d\n"   /* Exit value or signal */
+                        "si_utime %d\n"    /* User time consumed */
+                        "si_stime %d\n",   /* System time consumed */
+                        info->si_pid,
+                        info->si_uid,
+                        info->si_status,
+                        info->si_utime,
+                        info->si_stime);
+                /* 
+                 * Multiple child processes could terminate 
+                 * while one is in the process being reaped.
+                 * Loop ensures that any zombies which existed 
+                 * prior to invocation of the handler function 
+                 * will be reaped.
+                 */
+                while (waitpid((pid_t)(-1), 0, WNOHANG) > 0) {}
+        }
 }
 
 /*
@@ -186,11 +224,16 @@ void listen () {
         dbus_connection_unref(conn);
 }
 
+/*
+ *
+ *
+ */
 int main (int argc, char *argv[]) {
         thread_info *tinfo;
         int rc;
         int i;
         void *res;
+        struct sigaction act;
         
         /* Memory allocation for thread arguments */
         tinfo = malloc(sizeof(thread_info) * NUMBER_OF_THREADS);
@@ -198,23 +241,41 @@ int main (int argc, char *argv[]) {
                 handle_error("malloc for thread_info");
         }
         
+        /* Register signal handler. */
+        memset(&act, 0, sizeof(struct sigaction));
+        sigemptyset(&act.sa_mask);
+        act.sa_flags = SA_SIGINFO;
+        act.sa_sigaction = signal_handler;
+        sigaction(SIGCHLD, &act, NULL);
+        
         /* Thread creation */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
                 rc = pthread_create(&tinfo[i].thread, NULL, 
-                                    &wait_process_loop, (void*)&tinfo[i]);
+                                    &request_handler, (void*)&tinfo[i]);
                 if (rc) {
                         handle_error_en(rc, "pthread_create");
                 }
         }
-        
+        /* Time for thread initializations. */
         sleep(3);
         
-        /* TODO: Create condition variable between threads to alert that
-                 new process created. */
-        
-        /* TODO: Read application manifests from /etc/appmand */
-           
-        /* TODO: Listen and answer D-Bus method requests to run applications. */
+        /*
+         * Infinite loop of process waits. If there are processes 
+         * to wait, wait any. If not wait on the given condition 
+         * variable, when signaled, redo.
+         */
+        while (1) {
+                
+                /* wait for any child. */
+                
+                /* handle return code then continue */
+                
+                /* in case of erronous wait, check condition */
+                
+                rc = pthread_mutex_lock(&mutex);
+                rc = pthread_cond_wait(&child_exists, &mutex);
+                rc = pthread_mutex_unlock(&mutex);
+        }
         
         /* Join with threads */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
