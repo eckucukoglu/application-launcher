@@ -3,6 +3,7 @@
 #include <dbus/dbus.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #define NUMBER_OF_THREADS 1
 
@@ -13,7 +14,7 @@
         do { perror(msg); exit(EXIT_FAILURE); } while (0);
 
 /* 
- * Global mutex, recursive since thread that grabs the mutex 
+ * Recursive mutex is used since thread that grabs the mutex 
  * must be the same thread that release the mutex.
  */
 pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
@@ -23,17 +24,35 @@ pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
  */
 pthread_cond_t child_exists = PTHREAD_COND_INITIALIZER;
 
+/*
+ * Thread information. 
+ * Passed as an argument from main process to threads.
+ */
 struct thread_info {
         pthread_t thread;
 
 } thread_info;
 
+/*
+ * Application structure.
+ * path         : execution path.
+ * group        : cgroup gproup name.
+ * perms        : tbd
+ */
 struct application {
         char* path;
         char* group;
-        char* permissions;
+        char* perms;
 } application;
 
+/*
+ * Application list.
+ */
+application *applist;
+
+/*
+ * 
+ */
 const char *reasonstr(int signal, int code) {
         if (signal == SIGCHLD) {
                 switch(code) {
@@ -50,7 +69,16 @@ const char *reasonstr(int signal, int code) {
 }
 
 /*
- * Request handling using dbus
+ * Read application list from /etc/appmand/*.mf.
+ */
+int get_applist() {
+        
+        
+        return 0;
+}
+
+/*
+ * Request handling with dbus.
  */
 void *request_handler(void *targs) {
         thread_info *tinfo = targs;
@@ -67,6 +95,7 @@ void *request_handler(void *targs) {
  */
 void signal_handler(int signo, siginfo_t *info, void *p) {
         int status;
+        int rc;
         
         printf("signal %d received:\n"
                 "si_errno %d\n"    /* An errno value */
@@ -94,12 +123,14 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
                  * prior to invocation of the handler function 
                  * will be reaped.
                  */
-                while (waitpid((pid_t)(-1), 0, WNOHANG) > 0) {}
+                while ((rc = waitpid((pid_t)(-1), &status, WNOHANG)) > 0) {
+                        handle_status(rc, status);
+                }
         }
 }
 
 /*
- * Reply
+ * Reply for dbus messages.
  */
 void reply (DBusMessage* msg, DBusConnection* conn) {
         DBusMessage* reply;
@@ -225,6 +256,32 @@ void listen () {
 }
 
 /*
+ * Handle termination status of child process.
+ */
+void handle_status(int pid, int status) {
+        /* Child terminated normally. */
+        if (WIFEXITED(status)) {
+                printf("terminated normally.\n");
+        } 
+        /* Child terminated by signal. */
+        else if (WIFSIGNALED(status)) {
+                printf("terminated by signal.\n");
+        }
+        /* Child produced a core dump. */
+        else if (WCOREDUMP(status)) {
+                printf("produced a core dump.\n");
+        }
+        /* Child stopped by signal. */
+        else if (WIFSTOPPED(status)) {
+                printf("stopped by signal.\n");
+        }
+        /* Other conditions. */
+        else {
+                printf("anything then handled reasons.");
+        }
+}
+
+/*
  *
  *
  */
@@ -234,6 +291,7 @@ int main (int argc, char *argv[]) {
         int i;
         void *res;
         struct sigaction act;
+        int status;
         
         /* Memory allocation for thread arguments */
         tinfo = malloc(sizeof(thread_info) * NUMBER_OF_THREADS);
@@ -261,20 +319,25 @@ int main (int argc, char *argv[]) {
         
         /*
          * Infinite loop of process waits. If there are processes 
-         * to wait, wait any. If not wait on the given condition 
-         * variable, when signaled, redo.
+         * to wait, wait any of them. If not, wait on the given condition 
+         * variable. When signaled, redo.
          */
         while (1) {
-                
-                /* wait for any child. */
-                
-                /* handle return code then continue */
-                
-                /* in case of erronous wait, check condition */
-                
-                rc = pthread_mutex_lock(&mutex);
-                rc = pthread_cond_wait(&child_exists, &mutex);
-                rc = pthread_mutex_unlock(&mutex);
+                rc = waitpid((pid_t)(-1), &status, 0);
+                if (rc <= 0) {
+                        if (errno == ECHILD) {
+                                /* Does not have child, wait on condition. */
+                                rc = pthread_mutex_lock(&mutex);
+                                rc = pthread_cond_wait(&child_exists, &mutex);
+                                rc = pthread_mutex_unlock(&mutex);
+                                continue;
+                        } else if (errno == EINVAL) {
+                                handle_error_en(errno, "waitpid:invalid options");
+                        }
+                          
+                } else {
+                        handle_termination(rc, status);
+                }
         }
         
         /* Join with threads */
