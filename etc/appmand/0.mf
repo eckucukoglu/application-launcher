@@ -1,3 +1,9 @@
-APPPATH=/usr/bin/gnome-calculator
-APPGROUP=group0
-APPPERM=allow(camera)
+{
+  "id": 0,
+  "path": "/usr/bin/gnome-calculator",
+  "cgroup": "group01",
+  "perms": [
+    "camera",
+    "bluetooth"
+  ]
+}

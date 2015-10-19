@@ -4,20 +4,27 @@ Application launcher daemon
 Application launcher validates, groups and executes applications.
 If request arrived, appmand invokes method that triggered by D-bus.
 Application permissions are validated by manifest files that stored in 
-/etc/appman/.
+manifest directory.
 
 
 
 
-*.mf manifest files has name <appid>.mf that is a unique integer value, represent application.
+*.mf manifest files (in json structure) has name <appid>.mf that 
+is a unique integer value, represent application.
 
 Manifest files have to contain APPPATH, APPGROUP values which are execution path
 and application group respectively.
 
-**************************************
-** example /etc/appman/0.mf         **
-**                                  **
-** APPPATH=/usr/bin/gnome-calculator**
-** APPGROUP=group0                  **
-** APPPERM=none                     **
-**************************************
+*********************************************
+** example /etc/appman/0.mf                **
+**                                         **
+** {                                       **
+**   "id": 0,                              **
+**   "path": "/usr/bin/gnome-calculator",  **
+**   "cgroup": "group01",                  **
+**   "perms": [                            **
+**     "camera",                           **
+**     "bluetooth"                         **
+**   ]                                     **
+** }                                       **
+*********************************************

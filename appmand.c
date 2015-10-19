@@ -4,8 +4,19 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <dirent.h>
+#include <string.h>
 
 #define NUMBER_OF_THREADS 1
+
+/* Maximum number of allowed applications that defined in manifests. */
+#define MAX_NUMBER_APPLICATIONS 50
+
+/* 
+ * Application manifests are stored in here 
+ * like <appid>.mf as json structure. 
+ */
+#define MANIFEST_DIR "/etc/appmand/"
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);
@@ -28,18 +39,20 @@ pthread_cond_t child_exists = PTHREAD_COND_INITIALIZER;
  * Thread information. 
  * Passed as an argument from main process to threads.
  */
-struct thread_info {
+typedef struct thread_info {
         pthread_t thread;
 
 } thread_info;
 
 /*
  * Application structure.
+ * id           : application id.
  * path         : execution path.
  * group        : cgroup gproup name.
- * perms        : tbd
+ * perms        : tbd.
  */
-struct application {
+typedef struct application {
+        int id;
         char* path;
         char* group;
         char* perms;
@@ -48,7 +61,7 @@ struct application {
 /*
  * Application list.
  */
-application *applist;
+struct application applist[MAX_NUMBER_APPLICATIONS];
 
 /*
  * 
@@ -69,9 +82,32 @@ const char *reasonstr(int signal, int code) {
 }
 
 /*
- * Read application list from /etc/appmand/*.mf.
+ * Read application list from MANIFEST_DIR.
  */
 int get_applist() {
+        DIR * d;
+        struct dirent *entry;
+        
+        d = opendir(MANIFEST_DIR);
+        
+        if (! d) {
+                fprintf(stderr, "Cannot open directory '%s': %s\n",
+                        dir_name, strerror (errno));
+                exit (EXIT_FAILURE);
+        }
+    
+        while ((entry = readdir(d)) != NULL) {
+                printf("%s\n", entry->d_name);
+        }
+        
+        
+        /* Close the directory. */
+        if (closedir (d)) {
+                fprintf (stderr, "Could not close '%s': %s\n",
+                        dir_name, strerror (errno));
+                exit (EXIT_FAILURE);
+        }
+        
         
         
         return 0;
@@ -83,7 +119,7 @@ int get_applist() {
 void *request_handler(void *targs) {
         thread_info *tinfo = targs;
         
-        /* TODO: Read application manifests from /etc/appmand */
+        /* TODO: Read application manifests from manifest dir. */
            
         /* TODO: Listen and answer D-Bus method requests to run applications. */
         
@@ -203,7 +239,7 @@ void listen () {
         dbus_error_init(&err);
 
         /* Connect to the bus and check for errors. */
-        conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+        conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
         
         if (dbus_error_is_set(&err)) { 
                 fprintf(stderr, "Connection Error (%s)\n", err.message); 
@@ -299,6 +335,12 @@ int main (int argc, char *argv[]) {
                 handle_error("malloc for thread_info");
         }
         
+        /* Fill application list, once per lifetime. */
+        rc = get_applist();
+        if (rc) {
+                handle_error("get_applist");
+        }
+        
         /* Register signal handler. */
         memset(&act, 0, sizeof(struct sigaction));
         sigemptyset(&act.sa_mask);
@@ -309,7 +351,7 @@ int main (int argc, char *argv[]) {
         /* Thread creation */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
                 rc = pthread_create(&tinfo[i].thread, NULL, 
-                                    &request_handler, (void*)&tinfo[i]);
+                                    request_handler, (void*)&tinfo[i]);
                 if (rc) {
                         handle_error_en(rc, "pthread_create");
                 }
