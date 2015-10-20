@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#define __USE_GNU /* For recursive mutex initializer. */
 #include <pthread.h>
 #include <dbus/dbus.h>
 #include <signal.h>
@@ -6,6 +8,8 @@
 #include <errno.h>
 #include <dirent.h>
 #include <string.h>
+#include "cJSON.h"
+#include <unistd.h>
 
 #define NUMBER_OF_THREADS 1
 
@@ -54,14 +58,15 @@ typedef struct thread_info {
 typedef struct application {
         int id;
         char* path;
+        char* name;
         char* group;
-        char* perms;
+        /* char* perms; */
 } application;
 
 /*
  * Application list.
  */
-struct application applist[MAX_NUMBER_APPLICATIONS];
+application APPLIST[MAX_NUMBER_APPLICATIONS];
 
 /*
  * 
@@ -81,49 +86,312 @@ const char *reasonstr(int signal, int code) {
         return "unknown";
 }
 
+void json_to_application (char *text, int index) {
+	cJSON *root;
+	
+	root = cJSON_Parse(text);
+	if (!root) {
+	        printf("Error before: [%s]\n",cJSON_GetErrorPtr());
+	} else {
+		APPLIST[index].id = cJSON_GetObjectItem(root,"id")->valueint;
+		APPLIST[index].path = cJSON_GetObjectItem(root,"path")->valuestring;
+		APPLIST[index].name = cJSON_GetObjectItem(root,"name")->valuestring;
+		APPLIST[index].group = cJSON_GetObjectItem(root,"group")->valuestring;
+
+#ifdef DEBUG
+                printf("Application(%d): %s, on path %s\n", APPLIST[index].id, 
+                        APPLIST[index].name, APPLIST[index].path);
+                fflush(stdout);
+#endif /* DEBUG */
+
+		/* Fix pointer problem and free cjson object. */
+		/* cJSON_Delete(root); */
+	}
+}
+
 /*
- * Read application list from MANIFEST_DIR.
+ * Reads application list from manifest directory.
+ * Returns 0 on success.
  */
 int get_applist() {
         DIR * d;
         struct dirent *entry;
+        FILE *file;
+        long size;
+        char *filecontent;
+        int app_index = 0;
+        int ret;
+        
+        ret = chdir(MANIFEST_DIR);
+        if (ret!=0) {
+                perror("Error:");
+        }
         
         d = opendir(MANIFEST_DIR);
         
         if (! d) {
                 fprintf(stderr, "Cannot open directory '%s': %s\n",
-                        dir_name, strerror (errno));
+                        MANIFEST_DIR, strerror (errno));
                 exit (EXIT_FAILURE);
         }
-    
-        while ((entry = readdir(d)) != NULL) {
-                printf("%s\n", entry->d_name);
+        
+        while ((entry = readdir(d)) != NULL && 
+                app_index < MAX_NUMBER_APPLICATIONS) {
+                
+                if (!strcmp (entry->d_name, "."))
+                        continue;
+                if (!strcmp (entry->d_name, ".."))    
+                        continue;
+                
+                file = fopen(entry->d_name, "r");
+                if (!file) {
+                        fprintf(stderr, "Error : Failed to open entry file\n");
+                        /* TODO: Close directory. */
+                        /* perror(file),exit(1); */
+                        exit (EXIT_FAILURE);
+                }
+                fseek(file, 0, SEEK_END);
+                size = ftell(file);
+                rewind(file);
+                filecontent = calloc(1, size+1);
+                if (!filecontent) {
+                        fclose(file);
+                        fputs("memory alloc fails",stderr);
+                        exit(1);
+                }
+                
+                if (1 != fread(filecontent, size, 1, file)) {
+                        fclose(file);
+                        free(filecontent);
+                        fputs("entire read fails",stderr);
+                        exit(1);
+                }
+                
+                json_to_application(filecontent, app_index);
+                app_index++;
+                
+                free(filecontent);
+                fclose(file);
         }
         
         
         /* Close the directory. */
         if (closedir (d)) {
                 fprintf (stderr, "Could not close '%s': %s\n",
-                        dir_name, strerror (errno));
+                        MANIFEST_DIR, strerror (errno));
                 exit (EXIT_FAILURE);
         }
         
+        return 0;
+}
+
+/*
+ * 
+ */
+int run_app (int appid) {
+        int rc;
         
+        printf("Running application id: %d\n", appid);       
+        pid_t pid = fork();
+        
+        if (pid == 0) {
+                printf("Child process is going to execute %s\n", 
+                        APPLIST[appid].name);
+                        
+                rc = execl(APPLIST[appid].path, APPLIST[appid].name, (char*)NULL);
+                if (rc == -1) {
+                        handle_error("execl");
+                }
+        } else if (pid < 0) {
+                return -1;
+        }
         
         return 0;
+}
+
+/*
+ * Reply for dbus messages.
+ */
+void reply(DBusMessage* msg, DBusConnection* conn) {
+        DBusMessage* reply;
+        DBusMessageIter args;
+        /* dbus_uint32_t level = 21614; */
+        dbus_uint32_t serial = 0;
+        char* param = "";
+        int rc;
+
+        /* Read the arguments. */
+        if (!dbus_message_iter_init(msg, &args))
+                fprintf(stderr, "Message has no arguments!\n"); 
+        else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) 
+                fprintf(stderr, "Argument is not string!\n"); 
+        else 
+                dbus_message_iter_get_basic(&args, &param);
+
+        printf("Method called with %s\n", param);
+
+        /* Run the corresponding application */
+        rc = run_app(atoi(param));
+        if (rc == 0) {
+                /* Signal the condition variable that application has executed. */
+                pthread_mutex_lock(&mutex);
+                pthread_cond_signal(&child_exists);
+                pthread_mutex_unlock(&mutex);
+        }
+        
+        printf("Creating reply message with %d\n", rc);
+        
+        /* Create a reply from the message. */
+        reply = dbus_message_new_method_return(msg);
+
+        /* Add the arguments to the reply. */
+        dbus_message_iter_init_append(reply, &args);
+        if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &rc)) { 
+                fprintf(stderr, "Out Of Memory!\n"); 
+                exit(1);
+        }
+        
+        /*
+        if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &level)) { 
+                fprintf(stderr, "Out Of Memory!\n"); 
+                exit(1);
+        }
+        */
+
+        /* Send the reply && flush the connection. */
+        if (!dbus_connection_send(conn, reply, &serial)) {
+                fprintf(stderr, "Out Of Memory!\n"); 
+                exit(1);
+        }
+        
+        dbus_connection_flush(conn);
+
+        /* Free the reply. */
+        dbus_message_unref(reply);
+}
+
+/*
+ * Expose a method call and wait for it to be called.
+ */
+void listen () {
+        DBusMessage* msg;
+        DBusMessageIter args;
+        DBusConnection* conn;
+        DBusError err;
+        int ret;
+        char* param;
+        
+        printf("Inside listen server.\n");
+        
+        /* Initialize error. */
+        dbus_error_init(&err);
+
+        /* Connect to the bus and check for errors. */
+        conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+        
+        if (dbus_error_is_set(&err)) { 
+                fprintf(stderr, "Connection Error (%s)\n", err.message); 
+                dbus_error_free(&err); 
+        }
+        
+        if (NULL == conn) {
+                fprintf(stderr, "Connection Null\n"); 
+                exit(1); 
+        }
+
+        /* Request our name on the bus and check for errors. */
+        ret = dbus_bus_request_name(conn, "appman.method.server",
+                                DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
+                                
+        if (dbus_error_is_set(&err)) { 
+                fprintf(stderr, "Name Error (%s)\n", err.message); 
+                dbus_error_free(&err);
+        }
+        
+        if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret) { 
+                fprintf(stderr, "Not Primary Owner (%d)\n", ret);
+                exit(1); 
+        }
+
+        printf("Entering listen loop.\n");
+        
+        while (1) {
+                /* Non-blocking read of the next available message. */
+                dbus_connection_read_write(conn, 0);
+                msg = dbus_connection_pop_message(conn);
+
+                if (msg == NULL) { 
+                        sleep(1); 
+                        continue; 
+                }
+                
+                printf("D-bus message is catched.\n");
+                
+                /* Check this is a method call for the right interface & method. */
+                if (dbus_message_is_method_call(msg, "appman.method.Type", "runapp")) {
+                        reply(msg, conn);
+                } else {
+                        printf("Anything different came from dbus.\n");
+                }
+
+                /* Free the message. */
+                dbus_message_unref(msg);
+        }
+
+        /* Close the connection. */
+        //dbus_connection_close(conn);
+
+        dbus_connection_unref(conn);
 }
 
 /*
  * Request handling with dbus.
  */
 void *request_handler(void *targs) {
+        sigset_t set;
+        int s;
         thread_info *tinfo = targs;
         
-        /* TODO: Read application manifests from manifest dir. */
-           
-        /* TODO: Listen and answer D-Bus method requests to run applications. */
+        printf("Starting thread.\n");
+        
+        /* Mask signal handling for threads other than main thread. */
+        sigemptyset(&set);
+        sigaddset(&set,SIGCHLD);
+        s = pthread_sigmask(SIG_BLOCK,&set,NULL);
+        if (s != 0)
+                handle_error_en(s, "pthread_sigmask");
+        
+        printf("Thread listening d-bus methods\n");
+        /* Listen and answer D-Bus method requests to run applications. */
+        listen();
         
         pthread_exit(NULL);
+}
+
+/*
+ * Handle termination status of child process.
+ */
+void handle_status(int pid, int status) {
+        /* Child terminated normally. */
+        if (WIFEXITED(status)) {
+                printf("terminated normally.\n");
+        } 
+        /* Child terminated by signal. */
+        else if (WIFSIGNALED(status)) {
+                printf("terminated by signal.\n");
+        }
+        /* Child produced a core dump. */
+        else if (WCOREDUMP(status)) {
+                printf("produced a core dump.\n");
+        }
+        /* Child stopped by signal. */
+        else if (WIFSTOPPED(status)) {
+                printf("stopped by signal.\n");
+        }
+        /* Other conditions. */
+        else {
+                printf("anything then handled reasons.");
+        }
 }
 
 /*
@@ -166,158 +434,6 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
 }
 
 /*
- * Reply for dbus messages.
- */
-void reply (DBusMessage* msg, DBusConnection* conn) {
-        DBusMessage* reply;
-        DBusMessageIter args;
-        int stat = 0;
-        dbus_uint32_t level = 21614;
-        dbus_uint32_t serial = 0;
-        char* param = "";
-        int rc;
-
-        /* Read the arguments. */
-        if (!dbus_message_iter_init(msg, &args))
-                fprintf(stderr, "Message has no arguments!\n"); 
-        else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) 
-                fprintf(stderr, "Argument is not string!\n"); 
-        else 
-                dbus_message_iter_get_basic(&args, &param);
-
-        printf("Method called with %s\n", param);
-
-        /* Run the corresponding application */
-        
-        
-        /* Signal the condition variable that application has executed. */
-        rc = pthread_mutex_lock(&mutex);
-        rc = pthread_cond_signal(&child_exists);
-        rc = pthread_mutex_unlock(&mutex);
-        
-        /* Create a reply from the message. */
-        reply = dbus_message_new_method_return(msg);
-
-        /* Add the arguments to the reply. */
-        dbus_message_iter_init_append(reply, &args);
-        if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &stat)) { 
-                fprintf(stderr, "Out Of Memory!\n"); 
-                exit(1);
-        }
-        
-        if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &level)) { 
-                fprintf(stderr, "Out Of Memory!\n"); 
-                exit(1);
-        }
-
-        /* Send the reply && flush the connection. */
-        if (!dbus_connection_send(conn, reply, &serial)) {
-                fprintf(stderr, "Out Of Memory!\n"); 
-                exit(1);
-        }
-        
-        dbus_connection_flush(conn);
-
-        /* Free the reply. */
-        dbus_message_unref(reply);
-        
-}
-
-/*
- * Expose a method call and wait for it to be called.
- */
-void listen () {
-        DBusMessage* msg;
-        DBusMessage* reply;
-        DBusMessageIter args;
-        DBusConnection* conn;
-        DBusError err;
-        int ret;
-        char* param;
-
-        /* Initialize error. */
-        dbus_error_init(&err);
-
-        /* Connect to the bus and check for errors. */
-        conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
-        
-        if (dbus_error_is_set(&err)) { 
-                fprintf(stderr, "Connection Error (%s)\n", err.message); 
-                dbus_error_free(&err); 
-        }
-        
-        if (NULL == conn) {
-                fprintf(stderr, "Connection Null\n"); 
-                exit(1); 
-        }
-
-        /* Request our name on the bus and check for errors. */
-        ret = dbus_bus_request_name(conn, "appman.method.server",
-                                DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
-                                
-        if (dbus_error_is_set(&err)) { 
-                fprintf(stderr, "Name Error (%s)\n", err.message); 
-                dbus_error_free(&err);
-        }
-        
-        if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret) { 
-                fprintf(stderr, "Not Primary Owner (%d)\n", ret);
-                exit(1); 
-        }
-
-        while (true) {
-                /* Non-blocking read of the next available message. */
-                dbus_connection_read_write(conn, 0);
-                msg = dbus_connection_pop_message(conn);
-
-                if (msg == NULL) { 
-                        sleep(1); 
-                        continue; 
-                }
-
-                /* Check this is a method call for the right interface & method. */
-                if (dbus_message_is_method_call(msg, "appman.method.Type", "RunApp")) {
-                        /* TODO: Should seperate reply and requested command */
-                        reply(msg, conn);
-                }
-
-                /* Free the message. */
-                dbus_message_unref(msg);
-        }
-
-        /* Close the connection. */
-        //dbus_connection_close(conn);
-
-        dbus_connection_unref(conn);
-}
-
-/*
- * Handle termination status of child process.
- */
-void handle_status(int pid, int status) {
-        /* Child terminated normally. */
-        if (WIFEXITED(status)) {
-                printf("terminated normally.\n");
-        } 
-        /* Child terminated by signal. */
-        else if (WIFSIGNALED(status)) {
-                printf("terminated by signal.\n");
-        }
-        /* Child produced a core dump. */
-        else if (WCOREDUMP(status)) {
-                printf("produced a core dump.\n");
-        }
-        /* Child stopped by signal. */
-        else if (WIFSTOPPED(status)) {
-                printf("stopped by signal.\n");
-        }
-        /* Other conditions. */
-        else {
-                printf("anything then handled reasons.");
-        }
-}
-
-/*
  *
  *
  */
@@ -335,11 +451,15 @@ int main (int argc, char *argv[]) {
                 handle_error("malloc for thread_info");
         }
         
+        printf("Calling get_applist\n");
+        
         /* Fill application list, once per lifetime. */
         rc = get_applist();
         if (rc) {
                 handle_error("get_applist");
         }
+        
+        printf("Register signal handler\n");
         
         /* Register signal handler. */
         memset(&act, 0, sizeof(struct sigaction));
@@ -347,6 +467,8 @@ int main (int argc, char *argv[]) {
         act.sa_flags = SA_SIGINFO;
         act.sa_sigaction = signal_handler;
         sigaction(SIGCHLD, &act, NULL);
+        
+        printf("Thread creation\n");
         
         /* Thread creation */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
@@ -357,7 +479,9 @@ int main (int argc, char *argv[]) {
                 }
         }
         /* Time for thread initializations. */
-        sleep(3);
+        sleep(1);
+        
+        printf("Entering main process while loop\n");
         
         /*
          * Infinite loop of process waits. If there are processes 
@@ -365,22 +489,28 @@ int main (int argc, char *argv[]) {
          * variable. When signaled, redo.
          */
         while (1) {
+                printf("Looping in main loop\n");
                 rc = waitpid((pid_t)(-1), &status, 0);
+                printf("Returned waitpid from main loop:%d\n", rc);
                 if (rc <= 0) {
                         if (errno == ECHILD) {
+                                printf("No child exist, waiting condition.\n");
                                 /* Does not have child, wait on condition. */
                                 rc = pthread_mutex_lock(&mutex);
                                 rc = pthread_cond_wait(&child_exists, &mutex);
                                 rc = pthread_mutex_unlock(&mutex);
+                                printf("Condition unlocked.\n");
                                 continue;
                         } else if (errno == EINVAL) {
                                 handle_error_en(errno, "waitpid:invalid options");
                         }
                           
                 } else {
-                        handle_termination(rc, status);
+                        handle_status(rc, status);
                 }
         }
+        
+        printf("Joining with threads\n");
         
         /* Join with threads */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
@@ -390,7 +520,7 @@ int main (int argc, char *argv[]) {
                         handle_error_en(rc, "pthread_join");
                 }
                 
-                /* Check return value if needed */
+                /* Check return value if needed. */
                 free(res);
         }
         

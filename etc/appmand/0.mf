@@ -1,7 +1,8 @@
 {
   "id": 0,
   "path": "/usr/bin/gnome-calculator",
-  "cgroup": "group01",
+  "name": "gnome-calculator",
+  "group": "group01",
   "perms": [
     "camera",
     "bluetooth"
