@@ -93,10 +93,14 @@ void json_to_application (char *text, int index) {
 	if (!root) {
 	        printf("Error before: [%s]\n",cJSON_GetErrorPtr());
 	} else {
-		APPLIST[index].id = cJSON_GetObjectItem(root,"id")->valueint;
-		APPLIST[index].path = cJSON_GetObjectItem(root,"path")->valuestring;
-		APPLIST[index].name = cJSON_GetObjectItem(root,"name")->valuestring;
-		APPLIST[index].group = cJSON_GetObjectItem(root,"group")->valuestring;
+		APPLIST[index].id = 
+		        cJSON_GetObjectItem(root,"id")->valueint;
+		APPLIST[index].path = 
+		        cJSON_GetObjectItem(root,"path")->valuestring;
+		APPLIST[index].name = 
+		        cJSON_GetObjectItem(root,"name")->valuestring;
+		APPLIST[index].group = 
+		        cJSON_GetObjectItem(root,"group")->valuestring;
 
 #ifdef DEBUG
                 printf("Application(%d): %s, on path %s\n", APPLIST[index].id, 
@@ -129,7 +133,7 @@ int get_applist() {
         
         d = opendir(MANIFEST_DIR);
         
-        if (! d) {
+        if (!d) {
                 fprintf(stderr, "Cannot open directory '%s': %s\n",
                         MANIFEST_DIR, strerror (errno));
                 exit (EXIT_FAILURE);
@@ -186,7 +190,7 @@ int get_applist() {
 }
 
 /*
- * 
+ * Forks and execs application with the given id in child process.
  */
 int run_app (int appid) {
         int rc;
@@ -200,17 +204,25 @@ int run_app (int appid) {
                         break;
                 }
         }
+        
+#ifdef DEBUG
+                printf("Running application id: %d\n", appid); 
+                fflush(stdout);
+#endif /* DEBUG */
 
-        printf("Running application id: %d\n", appid);       
         pid_t pid = fork();
         
         if (pid == 0) {
-        
-        
+                /* TODO: Set application group settings. */
+
+#ifdef DEBUG
                 printf("Child process is going to execute %s\n", 
                         APPLIST[appindex].name);
+                fflush(stdout);
+#endif /* DEBUG */
                         
-                rc = execl(APPLIST[appindex].path, APPLIST[appindex].name, (char*)NULL);
+                rc = execl(APPLIST[appindex].path, 
+                        APPLIST[appindex].name, (char*)NULL);
                 if (rc == -1) {
                         handle_error("execl");
                 }
@@ -240,7 +252,10 @@ void reply(DBusMessage* msg, DBusConnection* conn) {
         else 
                 dbus_message_iter_get_basic(&args, &param);
 
-        printf("Method called with %s\n", param);
+#ifdef DEBUG
+                printf("Method called with %s\n", param);
+                fflush(stdout);
+#endif /* DEBUG */
 
         /* Run the corresponding application */
         rc = run_app(atoi(param));
@@ -250,8 +265,11 @@ void reply(DBusMessage* msg, DBusConnection* conn) {
                 pthread_cond_signal(&child_exists);
                 pthread_mutex_unlock(&mutex);
         }
-        
-        printf("Creating reply message with %d\n", rc);
+
+#ifdef DEBUG
+                printf("Creating reply message with %d\n", rc);
+                fflush(stdout);
+#endif /* DEBUG */        
         
         /* Create a reply from the message. */
         reply = dbus_message_new_method_return(msg);
@@ -293,8 +311,6 @@ void listen () {
         int ret;
         char* param;
         
-        printf("Inside listen server.\n");
-        
         /* Initialize error. */
         dbus_error_init(&err);
 
@@ -325,8 +341,6 @@ void listen () {
                 exit(1); 
         }
 
-        printf("Entering listen loop.\n");
-        
         while (1) {
                 /* Non-blocking read of the next available message. */
                 dbus_connection_read_write(conn, 0);
@@ -337,10 +351,9 @@ void listen () {
                         continue; 
                 }
                 
-                printf("D-bus message is catched.\n");
-                
                 /* Check this is a method call for the right interface & method. */
-                if (dbus_message_is_method_call(msg, "appman.method.Type", "runapp")) {
+                if (dbus_message_is_method_call(msg, 
+                                "appman.method.Type", "runapp")) {
                         reply(msg, conn);
                 } else {
                         printf("Anything different came from dbus.\n");
@@ -364,8 +377,6 @@ void *request_handler(void *targs) {
         int s;
         thread_info *tinfo = targs;
         
-        printf("Starting thread.\n");
-        
         /* Mask signal handling for threads other than main thread. */
         sigemptyset(&set);
         sigaddset(&set,SIGCHLD);
@@ -373,7 +384,6 @@ void *request_handler(void *targs) {
         if (s != 0)
                 handle_error_en(s, "pthread_sigmask");
         
-        printf("Thread listening d-bus methods\n");
         /* Listen and answer D-Bus method requests to run applications. */
         listen();
         
@@ -402,7 +412,7 @@ void handle_status(int pid, int status) {
         }
         /* Other conditions. */
         else {
-                printf("anything then handled reasons.");
+                printf("anything then handled reasons.\n");
         }
 }
 
@@ -412,15 +422,19 @@ void handle_status(int pid, int status) {
 void signal_handler(int signo, siginfo_t *info, void *p) {
         int status;
         int rc;
-        
-        printf("signal %d received:\n"
-                "si_errno %d\n"    /* An errno value */
-                "si_code %s\n"     /* Signal code */
-                ,signo,
-                info->si_errno,
-                reasonstr(signo, info->si_code));
+
+#ifdef DEBUG
+                printf("signal %d received:\n"
+                        "si_errno %d\n"    /* An errno value */
+                        "si_code %s\n"     /* Signal code */
+                        ,signo,
+                        info->si_errno,
+                        reasonstr(signo, info->si_code));
+                fflush(stdout);
+#endif /* DEBUG */      
 
         if (signo == SIGCHLD) {
+#ifdef DEBUG
                 printf(
                         "si_pid %d\n"      /* Sending process ID */
                         "si_uid %d\n",     /* Real user ID of sending process */
@@ -432,6 +446,9 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
                         info->si_status,
                         info->si_utime,
                         info->si_stime);
+                fflush(stdout);
+#endif /* DEBUG */ 
+                
                 /* 
                  * Multiple child processes could terminate 
                  * while one is in the process being reaped.
@@ -446,8 +463,7 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
 }
 
 /*
- *
- *
+ * Program main.
  */
 int main (int argc, char *argv[]) {
         thread_info *tinfo;
@@ -463,15 +479,11 @@ int main (int argc, char *argv[]) {
                 handle_error("malloc for thread_info");
         }
         
-        printf("Calling get_applist\n");
-        
         /* Fill application list, once per lifetime. */
         rc = get_applist();
         if (rc) {
                 handle_error("get_applist");
         }
-        
-        printf("Register signal handler\n");
         
         /* Register signal handler. */
         memset(&act, 0, sizeof(struct sigaction));
@@ -479,8 +491,6 @@ int main (int argc, char *argv[]) {
         act.sa_flags = SA_SIGINFO;
         act.sa_sigaction = signal_handler;
         sigaction(SIGCHLD, &act, NULL);
-        
-        printf("Thread creation\n");
         
         /* Thread creation */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
@@ -493,25 +503,25 @@ int main (int argc, char *argv[]) {
         /* Time for thread initializations. */
         sleep(1);
         
-        printf("Entering main process while loop\n");
-        
         /*
          * Infinite loop of process waits. If there are processes 
          * to wait, wait any of them. If not, wait on the given condition 
          * variable. When signaled, redo.
          */
         while (1) {
-                printf("Looping in main loop\n");
                 rc = waitpid((pid_t)(-1), &status, 0);
+                
+#ifdef DEBUG
                 printf("Returned waitpid from main loop:%d\n", rc);
+                fflush(stdout);
+#endif /* DEBUG */
+                
                 if (rc <= 0) {
                         if (errno == ECHILD) {
-                                printf("No child exist, waiting condition.\n");
                                 /* Does not have child, wait on condition. */
                                 rc = pthread_mutex_lock(&mutex);
                                 rc = pthread_cond_wait(&child_exists, &mutex);
                                 rc = pthread_mutex_unlock(&mutex);
-                                printf("Condition unlocked.\n");
                                 continue;
                         } else if (errno == EINVAL) {
                                 handle_error_en(errno, "waitpid:invalid options");
@@ -521,8 +531,6 @@ int main (int argc, char *argv[]) {
                         handle_status(rc, status);
                 }
         }
-        
-        printf("Joining with threads\n");
         
         /* Join with threads */
         for (i = 0; i < NUMBER_OF_THREADS; i++) {
