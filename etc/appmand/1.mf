@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "path": "/usr/bin/gnome-power-statistics",
+  "name": "gnome-power-statistics",
+  "group": "group02",
+  "perms": [
+    "camera"
+  ]
+}

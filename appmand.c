@@ -190,15 +190,27 @@ int get_applist() {
  */
 int run_app (int appid) {
         int rc;
+        int i;
+        int appindex;
         
+        /* Search for the appid in APPLIST. */
+        for (i = 0; i < MAX_NUMBER_APPLICATIONS; i++) {
+                if (APPLIST[i].id == appid) {
+                        appindex = i;
+                        break;
+                }
+        }
+
         printf("Running application id: %d\n", appid);       
         pid_t pid = fork();
         
         if (pid == 0) {
+        
+        
                 printf("Child process is going to execute %s\n", 
-                        APPLIST[appid].name);
+                        APPLIST[appindex].name);
                         
-                rc = execl(APPLIST[appid].path, APPLIST[appid].name, (char*)NULL);
+                rc = execl(APPLIST[appindex].path, APPLIST[appindex].name, (char*)NULL);
                 if (rc == -1) {
                         handle_error("execl");
                 }
