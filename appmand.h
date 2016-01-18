@@ -51,6 +51,7 @@ typedef struct application {
 
 
 const char *reasonstr(int, int);
+
 void json_to_application (char *, int);
 
 /*
@@ -82,7 +83,7 @@ void *request_handler(void *);
 /*
  * Handle termination status of child process.
  */
-void handle_status(int, int);
+void status_handler(int, int);
 
 /*
  * Signal handling for main process.

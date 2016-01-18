@@ -10,10 +10,13 @@ LIBS = -lm -lpthread $(DBUS_LIB)
 CFLAGS = -Wall
 DEBUG = -g -DDEBUG
 
+DAEMON = appmand
+TESTER = tester
+
 # ****************************************************
 
 all: cJSON.o appmand.c
-	$(CC) $(CFLAGS) $(DBUS_INCLUDE) -o appmand appmand.c cJSON.o $(LIBS)
+	$(CC) $(CFLAGS) $(DBUS_INCLUDE) -o $(DAEMON) appmand.c cJSON.o $(LIBS)
 
 debug: CFLAGS += $(DEBUG)
 debug: all
@@ -21,6 +24,10 @@ debug: all
 cJSON.o: cJSON.c cJSON.h
 	$(CC) $(CFLAGS) -c cJSON.c
 
+tester: tester.c
+	$(CC) $(CFLAGS) $(DBUS_INCLUDE) -o $(TESTER) tester.c $(LIBS)
+
 clean:
 	rm -f *.o
-	rm -f appmand
+	rm -f $(DAEMON)
+	rm -f $(TESTER)
