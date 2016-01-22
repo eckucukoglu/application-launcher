@@ -31,27 +31,37 @@
  * Passed as an argument from main process to threads.
  */
 typedef struct thread_info {
-        pthread_t thread;
+    pthread_t thread;
 } thread_info;
 
 /*
  * Application structure.
  * id           : application id.
  * path         : execution path.
+ * name         : application binary name.
  * group        : cgroup group name.
  * perms        : tbd.
+ * prettyname   : pretty application name.
+ * iconpath     : application icon's path.
+ * color        : theme color.
  */
 typedef struct application {
-        int id;
-        char* path;
-        char* name;
-        char* group;
-        /* char* perms; */
+    unsigned int id;
+    char* path;
+    char* name;
+    char* group;
+    /* char* perms; */
+    char* prettyname;
+    char* iconpath;
+    char* color;
 } application;
 
 
 const char *reasonstr(int, int);
 
+/*
+ * Convert json data to application structure.
+ */
 void json_to_application (char *, int);
 
 /*
@@ -66,9 +76,14 @@ int get_applist();
 int run_app (int);
 
 /*
- * Reply for dbus messages.
+ * Reply runapp request for dbus messages.
  */
-void reply(DBusMessage*, DBusConnection*);
+void reply_runapp (DBusMessage*, DBusConnection*);
+
+/*
+ * Reply listapps request for dbus messages.
+ */
+void reply_listapps (DBusMessage*, DBusConnection*);
 
 /*
  * Expose a method call and wait for it to be called.
@@ -78,19 +93,21 @@ void listen ();
 /*
  * Request handling with dbus.
  */
-void *request_handler(void *);
+void *request_handler (void *);
 
 /*
  * Handle termination status of child process.
  */
-void status_handler(int, int);
+void status_handler (int, int);
 
 /*
  * Signal handling for main process.
  */
-void signal_handler(int, siginfo_t *, void *);
+void signal_handler (int, siginfo_t *, void *);
 
 /* Application list. */
 application APPLIST[MAX_NUMBER_APPLICATIONS];
+/* Number of applications. */
+unsigned int number_of_applications = 0;
 
 #endif  /* not defined _APPMAND_H_ */

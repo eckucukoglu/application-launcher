@@ -6,5 +6,8 @@
   "perms": [
     "camera",
     "bluetooth"
-  ]
+  ],
+  "prettyname": "Calculator",
+  "iconpath": "cal-iconpath",
+  "color": "#00000"
 }

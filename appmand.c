@@ -38,10 +38,13 @@ void json_to_application (char *text, int index) {
 		APPLIST[index].path = cJSON_GetObjectItem(root,"path")->valuestring;
 		APPLIST[index].name = cJSON_GetObjectItem(root,"name")->valuestring;
 		APPLIST[index].group = cJSON_GetObjectItem(root,"group")->valuestring;
-
+        APPLIST[index].prettyname = cJSON_GetObjectItem(root, "prettyname")->valuestring;
+        APPLIST[index].iconpath = cJSON_GetObjectItem(root, "iconpath")->valuestring;
+        APPLIST[index].color = cJSON_GetObjectItem(root, "color")->valuestring;
+        number_of_applications++;
 #ifdef DEBUG
         printf("Application(%d): %s, on path %s\n", APPLIST[index].id,
-                APPLIST[index].name, APPLIST[index].path);
+                APPLIST[index].prettyname, APPLIST[index].path);
         fflush(stdout);
 #endif /* DEBUG */
 
@@ -72,8 +75,7 @@ int get_applist() {
         exit (EXIT_FAILURE);
     }
 
-    while ((entry = readdir(d)) != NULL &&
-        app_index < MAX_NUMBER_APPLICATIONS) {
+    while ((entry = readdir(d)) != NULL && app_index < MAX_NUMBER_APPLICATIONS) {
 
         if (!strcmp (entry->d_name, "."))
             continue;
@@ -164,10 +166,9 @@ int run_app (int appid) {
     return 0;
 }
 
-void reply(DBusMessage* msg, DBusConnection* conn) {
+void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     DBusMessage* reply;
     DBusMessageIter args;
-    /* dbus_uint32_t level = 21614; */
     dbus_uint32_t serial = 0;
     char* param = "";
     int rc;
@@ -209,12 +210,55 @@ void reply(DBusMessage* msg, DBusConnection* conn) {
         exit(1);
     }
 
-    /*
-    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &level)) {
+    /* Send the reply && flush the connection. */
+    if (!dbus_connection_send(conn, reply, &serial)) {
         fprintf(stderr, "Out Of Memory!\n");
         exit(1);
     }
-    */
+
+    dbus_connection_flush(conn);
+
+    /* Free the reply. */
+    dbus_message_unref(reply);
+}
+
+void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
+    DBusMessage* reply;
+    DBusMessageIter args, struct_i, array_i;
+    dbus_uint32_t serial = 0;
+    unsigned int i = 0;
+
+    /* Create a reply from the message. */
+    reply = dbus_message_new_method_return(msg);
+
+    /* Add the arguments to the reply. */
+    dbus_message_iter_init_append(reply, &args);
+    
+    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, 
+                                        &number_of_applications)) {
+        fprintf(stderr, "Out Of Memory!\n");
+        exit(1);
+    }
+    
+    dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "(usss)", &array_i);
+    for (i = 0; i < number_of_applications; ++i) {
+        dbus_message_iter_open_container(&array_i, DBUS_TYPE_STRUCT, NULL, &struct_i);
+        
+        dbus_message_iter_append_basic(&struct_i, DBUS_TYPE_UINT32, 
+                                       &(APPLIST[i].id));
+        dbus_message_iter_append_basic(&struct_i, DBUS_TYPE_STRING, 
+                                       &(APPLIST[i].prettyname));
+        dbus_message_iter_append_basic(&struct_i, DBUS_TYPE_STRING, 
+                                       &(APPLIST[i].iconpath));
+        dbus_message_iter_append_basic(&struct_i, DBUS_TYPE_STRING, 
+                                       &(APPLIST[i].color));
+        
+        dbus_message_iter_close_container(&array_i, &struct_i);
+        
+        printf("#(%d): %s, %s, %s supplied\n", APPLIST[i].id, APPLIST[i].prettyname,
+                                            APPLIST[i].iconpath, APPLIST[i].color);
+    }
+    dbus_message_iter_close_container(&args, &array_i);
 
     /* Send the reply && flush the connection. */
     if (!dbus_connection_send(conn, reply, &serial)) {
@@ -273,13 +317,23 @@ void listen () {
             sleep(1);
             continue;
         }
-
+        
+        printf("** Coming message info **\n");
+        printf("Sender: %s\n", dbus_message_get_sender(msg));
+        printf("Type: %d\n", dbus_message_get_type(msg));
+        printf("Path: %s\n", dbus_message_get_path(msg));
+        printf("Interface: %s\n", dbus_message_get_interface(msg));
+        printf("Member: %s\n", dbus_message_get_member(msg));
+        printf("Destination: %s\n", dbus_message_get_destination(msg));
+        printf("Signature: %s\n", dbus_message_get_signature(msg));
+        
         /* Check this is a method call for the right interface & method. */
-        if (dbus_message_is_method_call(msg,
-                        "appman.method.Type", "runapp")) {
-            reply(msg, conn);
+        if (dbus_message_is_method_call(msg, "appman.method.Type", "runapp")) {
+            reply_runapp(msg, conn);
+        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
+            reply_listapps(msg, conn);
         } else {
-            printf("Anything different came from dbus.\n");
+            printf("Coming message is not a method call.\n");
         }
 
         /* Free the message. */
@@ -300,7 +354,7 @@ void *request_handler(void *targs) {
     /* Mask signal handling for threads other than main thread. */
     sigemptyset(&set);
     sigaddset(&set,SIGCHLD);
-    s = pthread_sigmask(SIG_BLOCK,&set,NULL);
+    s = pthread_sigmask(SIG_BLOCK, &set, NULL);
     if (s != 0)
         handle_error_en(s, "pthread_sigmask");
 

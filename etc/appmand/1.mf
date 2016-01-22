@@ -5,5 +5,8 @@
   "group": "group02",
   "perms": [
     "camera"
-  ]
+  ],
+  "prettyname": "Power Statistics",
+  "iconpath": "power-iconpath",
+  "color": "#11111"
 }
