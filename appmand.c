@@ -31,17 +31,69 @@ void json_to_application (char *text, int index) {
 	cJSON *root;
 
 	root = cJSON_Parse(text);
+	
 	if (!root) {
         printf("Error before: [%s]\n",cJSON_GetErrorPtr());
 	} else {
-		APPLIST[index].id = cJSON_GetObjectItem(root,"id")->valueint;
-		APPLIST[index].path = cJSON_GetObjectItem(root,"path")->valuestring;
-		APPLIST[index].name = cJSON_GetObjectItem(root,"name")->valuestring;
-		APPLIST[index].group = cJSON_GetObjectItem(root,"group")->valuestring;
-        APPLIST[index].prettyname = cJSON_GetObjectItem(root, "prettyname")->valuestring;
-        APPLIST[index].iconpath = cJSON_GetObjectItem(root, "iconpath")->valuestring;
-        APPLIST[index].color = cJSON_GetObjectItem(root, "color")->valuestring;
+	    char field_names[7][50] = {
+	        "id",
+	        "path",
+            "name",
+            "group",
+            "prettyname",
+            "color",
+            "iconpath"
+	    };
+	    char* fields[7];
+	    int mandatory_field_count = 2;
+	    int optional_field_count = 5;
+	    cJSON *child;
+	    int i;
+	    unsigned int id;
+	    
+	    /* First read mandatory fields. */
+	    i = 0;
+	    while (mandatory_field_count > 0) {
+	        child = cJSON_GetObjectItem(root, field_names[i]);
+	        if (child != NULL) {
+	            if (i == 0)
+	                id = child->valueint;
+	            else
+	                fields[i] = child->valuestring;
+	            
+	        } else {
+	            printf("Can not find cjson object %s\n", field_names[i]);
+                exit(1);	    
+	        }
+	        
+	        i++;
+	        mandatory_field_count--;
+	    }
+	    
+	    /* Then read optional fields. */ 
+	    while (optional_field_count > 0) {
+	        child = cJSON_GetObjectItem(root, field_names[i]);
+	        if (child != NULL)
+	            fields[i] = child->valuestring;
+	        else
+	            printf("Can not find cjson object %s\n", field_names[i]);
+	    
+	        i++;
+	        optional_field_count--;
+	    }
+	    
+	    // TODO: Assign default values if exists.
+	    
+	    APPLIST[index].id = id;
+        APPLIST[index].path = fields[1];
+		APPLIST[index].name = fields[2];
+		APPLIST[index].group = fields[3];
+        APPLIST[index].prettyname = fields[4];
+        APPLIST[index].iconpath = fields[5];
+        APPLIST[index].color = fields[6];
+        
         number_of_applications++;
+        
 #ifdef DEBUG
         printf("Application(%d): %s, on path %s\n", APPLIST[index].id,
                 APPLIST[index].prettyname, APPLIST[index].path);
@@ -81,7 +133,7 @@ int get_applist() {
             continue;
         if (!strcmp (entry->d_name, ".."))
             continue;
-
+    
         file = fopen(entry->d_name, "r");
         if (!file) {
             fprintf(stderr, "Error : Failed to open entry file\n");
@@ -106,7 +158,7 @@ int get_applist() {
             fputs("entire read fails",stderr);
             exit(1);
         }
-
+        
         json_to_application(filecontent, app_index);
         app_index++;
 
