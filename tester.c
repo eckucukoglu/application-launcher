@@ -48,7 +48,7 @@ void query_listapps() {
     // request our name on the bus
     ret = dbus_bus_request_name(conn, "appman.method.caller", 
                                 DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
-                                
+    
     if (dbus_error_is_set(&err)) { 
         fprintf(stderr, "Name Error (%s)\n", err.message); 
         dbus_error_free(&err);
@@ -65,10 +65,10 @@ void query_listapps() {
                                        "listapps"); // method name
     
     if (NULL == msg) { 
-        fprintf(stderr, "Message Null\n");
+        fprintf(stderr, "memory can't be allocated for the message\n");
         exit(1);
     }
-
+    
     // send message and get a handle for a reply
     if (!dbus_connection_send_with_reply (conn, msg, &pending, -1)) { // -1 is default timeout
         fprintf(stderr, "Out Of Memory!\n"); 
@@ -82,7 +82,7 @@ void query_listapps() {
     
     dbus_connection_flush(conn);
 
-    printf("Request Sent\n");
+    printf("Request Sent to Dbus\n");
 
     // free message
     dbus_message_unref(msg);
@@ -101,6 +101,57 @@ void query_listapps() {
     // free the pending message handle
     dbus_pending_call_unref(pending);
 
+    printf("** Message info **\n");
+    printf("Sender: %s\n", dbus_message_get_sender(msg));
+    printf("Type: %d\n", dbus_message_get_type(msg));
+    printf("Path: %s\n", dbus_message_get_path(msg));
+    printf("Interface: %s\n", dbus_message_get_interface(msg));
+    printf("Member: %s\n", dbus_message_get_member(msg));
+    printf("Destination: %s\n", dbus_message_get_destination(msg));
+    printf("Signature: %s\n", dbus_message_get_signature(msg));
+    
+    // TODO: in case of unexpected message type, free objects.
+    
+    switch (dbus_message_get_type(msg)) {
+    case 0: /* INVALID */
+        printf("Invalid message from dbus.\n");
+        exit(1);
+        break;
+    
+    case 1: /* METHOD_CALL */
+        printf("Received method call from dbus, expecting method return\n");
+        exit(1);
+        break;
+    
+    case 2: /* METHOD_RETURN */
+        printf("Received method return.\n");
+        break;
+    
+    case 3: /* ERROR */
+        printf("Received error message from dbus.\n");
+        char *err_message;
+       if (!dbus_message_iter_init(msg, &args))
+            fprintf(stderr, "Message has no arguments!\n"); 
+        else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args)) 
+            fprintf(stderr, "Argument is not string!\n"); 
+        else
+            dbus_message_iter_get_basic(&args, &err_message);
+        
+        printf("%s\n", err_message);
+        exit(1);
+        break;
+    
+    case 4: /* SIGNAL */
+        printf("Message type is signal, expecting method return.\n");
+        exit(1);
+        break;
+    
+    default:
+        printf("Unknown message type.\n");
+        exit(1);
+        break;
+    }
+    
     // read the parameters
     if (!dbus_message_iter_init(msg, &args))
         fprintf(stderr, "Message has no arguments!\n"); 
