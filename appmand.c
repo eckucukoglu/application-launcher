@@ -27,6 +27,34 @@ const char *reasonstr(int signal, int code) {
     return "unknown";
 }
 
+pid_t run_appman_view() {
+    int rc;
+    pid_t pid = fork();
+
+    if (pid == 0) {
+
+#ifdef DEBUG
+        printf("Child process is going to execute %s\n", APPMAN_VIEW);
+        fflush(stdout);
+#endif /* DEBUG */
+
+        rc = execl(APPMAN_VIEW_PATH, APPMAN_VIEW, (char*)NULL);
+
+        if (rc == -1) {
+            handle_error("execl");
+        }
+    } else if (pid < 0) {
+        handle_error("fork");
+    }
+    
+#ifdef DEBUG
+    printf("APPMAN VIEW launched with pid:%d\n", pid);
+    fflush(stdout);
+#endif /* DEBUG */
+    
+    return pid;
+}
+
 void json_to_application (char *text, int index) {
 	cJSON *root;
 
@@ -91,6 +119,7 @@ void json_to_application (char *text, int index) {
         APPLIST[index].prettyname = fields[4];
         APPLIST[index].iconpath = fields[5];
         APPLIST[index].color = fields[6];
+        APPLIST[index].pid = -1;
         
         number_of_applications++;
         
@@ -100,7 +129,7 @@ void json_to_application (char *text, int index) {
         fflush(stdout);
 #endif /* DEBUG */
 
-		/* Fix pointer problem and free cjson object. */
+		/* TODO: Fix pointer problem and free cjson object. */
 		/* cJSON_Delete(root); */
 	}
 }
@@ -180,7 +209,15 @@ int get_applist() {
 int run_app (int appid) {
     int rc;
     int i;
-    int appindex;
+    int appindex = -1;
+
+    if (number_of_live_applications >= MAX_NUMBER_LIVE_APPLICATIONS) {
+#ifdef DEBUG
+        printf("Reached permitted number of live apps\n");
+        fflush(stdout);
+#endif /* DEBUG */
+        return -1;
+    }
 
     /* Search for the appid in APPLIST. */
     for (i = 0; i < MAX_NUMBER_APPLICATIONS; i++) {
@@ -189,11 +226,10 @@ int run_app (int appid) {
             break;
         }
     }
-
-#ifdef DEBUG
-    printf("Running application id: %d\n", appid);
-    fflush(stdout);
-#endif /* DEBUG */
+    
+    if (appindex == -1) {
+        return -1;
+    }
 
     pid_t pid = fork();
 
@@ -208,12 +244,26 @@ int run_app (int appid) {
 
         rc = execl(APPLIST[appindex].path,
                 APPLIST[appindex].name, (char*)NULL);
+
         if (rc == -1) {
             handle_error("execl");
         }
     } else if (pid < 0) {
         return -1;
     }
+    
+    /* Suspend APPMAN view. */
+    int kill_ret = kill(appman_view_pid, SIGSTOP);
+    if (kill_ret != 0) {
+        printf("Could not send a SIGSTOP to pid:%d\n", appman_view_pid);
+        fflush(stdout);
+    }
+
+    /* TODO: Do we need to clear fb? */
+    
+    APPLIST[appindex].pid = pid;
+    LIVEAPPS[number_of_live_applications] = &APPLIST[appindex];
+    number_of_live_applications++;
 
     return 0;
 }
@@ -222,29 +272,40 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     DBusMessage* reply;
     DBusMessageIter args;
     dbus_uint32_t serial = 0;
-    char* param = "";
     int rc;
-
+    dbus_uint32_t app_id;
+    
     /* Read the arguments. */
-    if (!dbus_message_iter_init(msg, &args))
-        fprintf(stderr, "Message has no arguments!\n");
-    else if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&args))
-        fprintf(stderr, "Argument is not string!\n");
-    else
-        dbus_message_iter_get_basic(&args, &param);
-
+    if (!dbus_message_iter_init(msg, &args)) {
 #ifdef DEBUG
-    printf("Method called with %s\n", param);
-    fflush(stdout);
+        fprintf(stderr, "Message has no arguments!\n");
+        fflush(stderr);
+#endif /* DEBUG */
+        rc = -1;
+    }
+    else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
+#ifdef DEBUG
+        fprintf(stderr, "Argument is not integer!\n");
+        fflush(stderr);
+#endif /* DEBUG */
+        rc = -1;
+    }
+    else {
+        dbus_message_iter_get_basic(&args, &app_id);
+        
+#ifdef DEBUG
+        printf("Coming run request for app_id: %d\n", app_id);
+        fflush(stdout);
 #endif /* DEBUG */
 
-    /* Run the corresponding application */
-    rc = run_app(atoi(param));
-    if (rc == 0) {
-        /* Signal the condition variable that application has executed. */
-        pthread_mutex_lock(&mutex);
-        pthread_cond_signal(&child_exists);
-        pthread_mutex_unlock(&mutex);
+        /* Run the corresponding application */
+        rc = run_app(app_id);
+        if (rc == 0) {
+            /* Signal the condition variable that application has executed. */
+            pthread_mutex_lock(&mutex);
+            pthread_cond_signal(&child_exists);
+            pthread_mutex_unlock(&mutex);
+        }
     }
 
 #ifdef DEBUG
@@ -306,9 +367,11 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
                                        &(APPLIST[i].color));
         
         dbus_message_iter_close_container(&array_i, &struct_i);
-        
+#ifdef DEBUG
         printf("#(%d): %s, %s, %s supplied\n", APPLIST[i].id, APPLIST[i].prettyname,
                                             APPLIST[i].iconpath, APPLIST[i].color);
+        fflush(stdout);
+#endif /* DEBUG*/
     }
     dbus_message_iter_close_container(&args, &array_i);
 
@@ -359,7 +422,7 @@ void listen () {
         fprintf(stderr, "Not Primary Owner (%d)\n", ret);
         exit(1);
     }
-
+    
     while (1) {
         /* Non-blocking read of the next available message. */
         dbus_connection_read_write(conn, 0);
@@ -369,8 +432,8 @@ void listen () {
             sleep(1);
             continue;
         }
-        
-        printf("** Coming message info **\n");
+#ifdef DEBUG
+        printf("--APPMAND-COMING-DBUS-MESSAGE----\n");
         printf("Sender: %s\n", dbus_message_get_sender(msg));
         printf("Type: %d\n", dbus_message_get_type(msg));
         printf("Path: %s\n", dbus_message_get_path(msg));
@@ -378,23 +441,37 @@ void listen () {
         printf("Member: %s\n", dbus_message_get_member(msg));
         printf("Destination: %s\n", dbus_message_get_destination(msg));
         printf("Signature: %s\n", dbus_message_get_signature(msg));
+        fflush(stdout);
+#endif /* DEBUG */
         
         /* Check this is a method call for the right interface & method. */
         if (dbus_message_is_method_call(msg, "appman.method.Type", "runapp")) {
             reply_runapp(msg, conn);
         } else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
             reply_listapps(msg, conn);
-        } else {
+        } 
+#ifdef DEBUG
+        else {
             printf("Coming message is not a method call.\n");
+            fflush(stdout);
+            char* sigvalue;
+            DBusMessageIter args;        
+            dbus_message_iter_init(msg, &args);
+            dbus_message_iter_get_basic(&args, &sigvalue);
+            printf("Got Signal with value %s\n", sigvalue);
         }
+        printf("---------------------------------\n");
+        fflush(stdout);
+#endif /* DEBUG */
 
         /* Free the message. */
         dbus_message_unref(msg);
     }
 
     /* Close the connection. */
-    //dbus_connection_close(conn);
-
+    dbus_connection_close(conn);
+    // TODO: should i close connection here?
+    
     dbus_connection_unref(conn);
 }
 
@@ -405,7 +482,7 @@ void *request_handler(void *targs) {
 
     /* Mask signal handling for threads other than main thread. */
     sigemptyset(&set);
-    sigaddset(&set,SIGCHLD);
+    sigaddset(&set, SIGCHLD);
     s = pthread_sigmask(SIG_BLOCK, &set, NULL);
     if (s != 0)
         handle_error_en(s, "pthread_sigmask");
@@ -417,25 +494,75 @@ void *request_handler(void *targs) {
 }
 
 void status_handler(int pid, int status) {
+    int i;
+    bool kill_order = false;
+    
     /* Child terminated normally. */
     if (WIFEXITED(status)) {
-        printf("terminated normally.\n");
+        kill_order = true;
+#ifdef DEBUG
+        printf("terminated normally %d\n", pid);
+        fflush(stdout);
+#endif /* DEBUG */
+        
     }
     /* Child terminated by signal. */
     else if (WIFSIGNALED(status)) {
-        printf("terminated by signal.\n");
+        kill_order = true;
+#ifdef DEBUG
+        printf("terminated by signal %d\n", pid);
+        fflush(stdout);
+#endif /* DEBUG */        
     }
     /* Child produced a core dump. */
     else if (WCOREDUMP(status)) {
-        printf("produced a core dump.\n");
+        kill_order = true;
+#ifdef DEBUG
+        printf("produced a core dump %d\n", pid);
+        fflush(stdout);
+#endif /* DEBUG */ 
     }
     /* Child stopped by signal. */
     else if (WIFSTOPPED(status)) {
-        printf("stopped by signal.\n");
+        kill_order = true;
+#ifdef DEBUG
+        printf("stopped by signal %d\n", pid);
+        fflush(stdout);
+#endif /* DEBUG */
     }
     /* Other conditions. */
     else {
-        printf("anything then handled reasons.\n");
+#ifdef DEBUG
+        printf("anything then handled reasons %d\n", pid);
+        fflush(stdout);
+#endif /* DEBUG */
+    }
+    
+    if (kill_order) {
+        
+        if (pid != appman_view_pid) {
+            for (i = 0; i < MAX_NUMBER_LIVE_APPLICATIONS; i++) {
+                /* Find which running app has changed its states. */
+                if (pid == LIVEAPPS[i]->pid) {
+#ifdef DEBUG
+                    printf("%s is going to shutdown\n", LIVEAPPS[i]->prettyname);
+                    fflush(stdout);
+#endif /* DEBUG */
+                    LIVEAPPS[i] = NULL;
+                    number_of_live_applications--;
+                    break;
+                }
+            }
+            
+            int ret = kill(appman_view_pid, SIGCONT);
+            if (ret != 0) {
+                printf("Could not send a SIGCONT to pid:%d\n", appman_view_pid);
+                fflush(stdout);
+            }
+        } else {
+            /* Then restart appman view. */
+            appman_view_pid = run_appman_view();
+        }
     }
 }
 
@@ -444,10 +571,10 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
     int rc;
 
 #ifdef DEBUG
-    printf("signal %d received:\n"
+    printf("Signal %d received:\n"
             "si_errno %d\n"    /* An errno value */
-            "si_code %s\n"     /* Signal code */
-            ,signo,
+            "si_code %s\n",     /* Signal code */
+            signo,
             info->si_errno,
             reasonstr(signo, info->si_code));
             fflush(stdout);
@@ -456,10 +583,10 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
     if (signo == SIGCHLD) {
 #ifdef DEBUG
         printf( "si_pid %d\n"      /* Sending process ID */
-                "si_uid %d\n",     /* Real user ID of sending process */
+                "si_uid %d\n"     /* Real user ID of sending process */
                 "si_status %d\n"   /* Exit value or signal */
-                "si_utime %d\n"    /* User time consumed */
-                "si_stime %d\n",   /* System time consumed */
+                "si_utime %ld\n"    /* User time consumed */
+                "si_stime %ld\n",   /* System time consumed */
                 info->si_pid,
                 info->si_uid,
                 info->si_status,
@@ -518,7 +645,10 @@ int main (int argc, char *argv[]) {
     }
     /* Time for thread initializations. */
     sleep(1);
-
+    
+    /* Start the appman view. */
+    appman_view_pid = run_appman_view();
+    
     /*
      * Infinite loop of process waits. If there are processes
      * to wait, wait any of them. If not, wait on the given condition
@@ -556,7 +686,6 @@ int main (int argc, char *argv[]) {
             handle_error_en(rc, "pthread_join");
         }
 
-        /* Check return value if needed. */
         free(res);
     }
 

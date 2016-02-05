@@ -17,8 +17,13 @@
 #define NUMBER_OF_THREADS 1
 /* Maximum number of applications. */
 #define MAX_NUMBER_APPLICATIONS 50
+/* Maximum number of running applications. */
+#define MAX_NUMBER_LIVE_APPLICATIONS 1
 /* Manifest storage. */
 #define MANIFEST_DIR "/etc/appmand/"
+/* Qt application that leads appman daemon. */
+#define APPMAN_VIEW_PATH "/usr/bin/appman-view"
+#define APPMAN_VIEW "appman-view"
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);
@@ -26,12 +31,15 @@
 #define handle_error(msg) \
         do { perror(msg); exit(EXIT_FAILURE); } while (0);
 
+typedef enum { false, true } bool;
+
 /*
  * Thread information.
  * Passed as an argument from main process to threads.
  */
 typedef struct thread_info {
     pthread_t thread;
+    
 } thread_info;
 
 /*
@@ -54,10 +62,16 @@ typedef struct application {
     char* prettyname;
     char* iconpath;
     char* color;
+    pid_t pid; /* -1 unless it is running. */
 } application;
 
-
 const char *reasonstr(int, int);
+
+/*
+ * Forks and execs appman view.
+ * Returns pid of a child.
+ */
+pid_t run_appman_view();
 
 /*
  * Convert json data to application structure.
@@ -107,7 +121,13 @@ void signal_handler (int, siginfo_t *, void *);
 
 /* Application list. */
 application APPLIST[MAX_NUMBER_APPLICATIONS];
-/* Number of applications. */
+/* Number of applications in the system. */
 unsigned int number_of_applications = 0;
+/* Running applications. */
+application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS];
+/* Number of running applications. */
+unsigned int number_of_live_applications = 0;
+/* Process id of a appman view. */
+pid_t appman_view_pid = 0;
 
 #endif  /* not defined _APPMAND_H_ */

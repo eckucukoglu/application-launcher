@@ -208,7 +208,7 @@ void query_listapps() {
 /**
  * Call a runapp method on a remote object.
  */
-void query_runapp(char* param) {
+void query_runapp(int app_id) {
     DBusMessage* msg;
     DBusMessageIter args;
     DBusConnection* conn;
@@ -217,12 +217,12 @@ void query_runapp(char* param) {
     int ret;
     dbus_uint32_t run_ret;
 
-    printf("Calling remote method with %s\n", param);
+    printf("Calling runapp method with id:%d\n", app_id);
 
     // initialiset the errors
     dbus_error_init(&err);
 
-    // connect to the system bus and check for errors
+    // connect to the session bus and check for errors
     conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
     if (dbus_error_is_set(&err)) { 
         fprintf(stderr, "Connection Error (%s)\n", err.message); 
@@ -243,7 +243,7 @@ void query_runapp(char* param) {
     }
     
     if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret) { 
-    exit(1);
+        exit(1);
     }
 
     // create a new method call and check for errors
@@ -259,7 +259,7 @@ void query_runapp(char* param) {
 
     // append arguments
     dbus_message_iter_init_append(msg, &args);
-    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_STRING, &param)) {
+    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &app_id)) {
         fprintf(stderr, "Out Of Memory!\n"); 
         exit(1);
     }
@@ -315,7 +315,7 @@ void query_runapp(char* param) {
 int main(int argc, char** argv) {
 
     if (argv[1] != NULL && strcmp("runapp", argv[1]) == 0 && argv[2] != NULL)
-        query_runapp(argv[2]);
+        query_runapp(atoi(argv[2]));
     else if (argv[1] != NULL && strcmp(argv[1], "listapps") == 0)
         query_listapps();
     else {
