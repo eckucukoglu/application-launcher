@@ -41,7 +41,8 @@ pid_t run_appman_view() {
         rc = execl(APPMAN_VIEW_PATH, APPMAN_VIEW, (char*)NULL);
 
         if (rc == -1) {
-            handle_error("execl");
+            sleep(1);
+            handle_error("Could not run APPMAN_VIEW\n");
         }
     } else if (pid < 0) {
         handle_error("fork");
