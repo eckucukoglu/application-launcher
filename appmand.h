@@ -22,8 +22,10 @@
 /* Manifest storage. */
 #define MANIFEST_DIR "/etc/appmand/"
 /* Qt application that leads appman daemon. */
-#define APPMAN_VIEW_PATH "/usr/bin/appman-view"
-#define APPMAN_VIEW "appman-view"
+#define APPMAN_VIEW_PATH "/usr/bin/DesktopScreen"
+#define APPMAN_VIEW "DesktopScreen"
+
+#define APPMAN_DEBUG_PREFIX "D >> "
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);

@@ -34,6 +34,7 @@ pid_t run_appman_view() {
     if (pid == 0) {
 
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Child process is going to execute %s\n", APPMAN_VIEW);
         fflush(stdout);
 #endif /* DEBUG */
@@ -42,13 +43,14 @@ pid_t run_appman_view() {
 
         if (rc == -1) {
             sleep(1);
-            handle_error("Could not run APPMAN_VIEW\n");
+            handle_error("Could not run APPMAN_VIEW");
         }
     } else if (pid < 0) {
         handle_error("fork");
     }
     
 #ifdef DEBUG
+    printf(APPMAN_DEBUG_PREFIX);
     printf("APPMAN VIEW launched with pid:%d\n", pid);
     fflush(stdout);
 #endif /* DEBUG */
@@ -91,6 +93,7 @@ void json_to_application (char *text, int index) {
 	                fields[i] = child->valuestring;
 	            
 	        } else {
+	            printf(APPMAN_DEBUG_PREFIX);
 	            printf("Can not find cjson object %s\n", field_names[i]);
                 exit(1);	    
 	        }
@@ -104,8 +107,10 @@ void json_to_application (char *text, int index) {
 	        child = cJSON_GetObjectItem(root, field_names[i]);
 	        if (child != NULL)
 	            fields[i] = child->valuestring;
-	        else
+	        else {
+                printf(APPMAN_DEBUG_PREFIX);	        
 	            printf("Can not find cjson object %s\n", field_names[i]);
+	        }
 	    
 	        i++;
 	        optional_field_count--;
@@ -125,6 +130,7 @@ void json_to_application (char *text, int index) {
         number_of_applications++;
         
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Application(%d): %s, on path %s\n", APPLIST[index].id,
                 APPLIST[index].prettyname, APPLIST[index].path);
         fflush(stdout);
@@ -152,6 +158,7 @@ int get_applist() {
     d = opendir(MANIFEST_DIR);
 
     if (!d) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Cannot open directory '%s': %s\n",
                 MANIFEST_DIR, strerror (errno));
         exit (EXIT_FAILURE);
@@ -166,6 +173,7 @@ int get_applist() {
     
         file = fopen(entry->d_name, "r");
         if (!file) {
+            printf(APPMAN_DEBUG_PREFIX);
             fprintf(stderr, "Error : Failed to open entry file\n");
             /* TODO: Close directory. */
             /* perror(file),exit(1); */
@@ -199,6 +207,7 @@ int get_applist() {
 
     /* Close the directory. */
     if (closedir (d)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf (stderr, "Could not close '%s': %s\n",
                 MANIFEST_DIR, strerror (errno));
         exit (EXIT_FAILURE);
@@ -214,6 +223,7 @@ int run_app (int appid) {
 
     if (number_of_live_applications >= MAX_NUMBER_LIVE_APPLICATIONS) {
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Reached permitted number of live apps\n");
         fflush(stdout);
 #endif /* DEBUG */
@@ -238,6 +248,7 @@ int run_app (int appid) {
         /* TODO: Set application group settings. */
 
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Child process is going to execute %s\n",
                 APPLIST[appindex].name);
         fflush(stdout);
@@ -256,6 +267,7 @@ int run_app (int appid) {
     /* Suspend APPMAN view. */
     int kill_ret = kill(appman_view_pid, SIGSTOP);
     if (kill_ret != 0) {
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Could not send a SIGSTOP to pid:%d\n", appman_view_pid);
         fflush(stdout);
     }
@@ -279,6 +291,7 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     /* Read the arguments. */
     if (!dbus_message_iter_init(msg, &args)) {
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Message has no arguments!\n");
         fflush(stderr);
 #endif /* DEBUG */
@@ -286,6 +299,7 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     }
     else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Argument is not integer!\n");
         fflush(stderr);
 #endif /* DEBUG */
@@ -295,7 +309,8 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
         dbus_message_iter_get_basic(&args, &app_id);
         
 #ifdef DEBUG
-        printf("Coming run request for app_id: %d\n", app_id);
+        printf(APPMAN_DEBUG_PREFIX);
+        printf("Run request for app_id: %d\n", app_id);
         fflush(stdout);
 #endif /* DEBUG */
 
@@ -310,6 +325,7 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     }
 
 #ifdef DEBUG
+    printf(APPMAN_DEBUG_PREFIX);
     printf("Creating reply message with %d\n", rc);
     fflush(stdout);
 #endif /* DEBUG */
@@ -320,12 +336,14 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     /* Add the arguments to the reply. */
     dbus_message_iter_init_append(reply, &args);
     if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &rc)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Out Of Memory!\n");
         exit(1);
     }
 
     /* Send the reply && flush the connection. */
     if (!dbus_connection_send(conn, reply, &serial)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Out Of Memory!\n");
         exit(1);
     }
@@ -350,6 +368,7 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
     
     if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, 
                                         &number_of_applications)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Out Of Memory!\n");
         exit(1);
     }
@@ -369,6 +388,7 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
         
         dbus_message_iter_close_container(&array_i, &struct_i);
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("#(%d): %s, %s, %s supplied\n", APPLIST[i].id, APPLIST[i].prettyname,
                                             APPLIST[i].iconpath, APPLIST[i].color);
         fflush(stdout);
@@ -378,6 +398,7 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
 
     /* Send the reply && flush the connection. */
     if (!dbus_connection_send(conn, reply, &serial)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Out Of Memory!\n");
         exit(1);
     }
@@ -401,11 +422,13 @@ void listen () {
     conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
 
     if (dbus_error_is_set(&err)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Connection Error (%s)\n", err.message);
         dbus_error_free(&err);
     }
 
     if (NULL == conn) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Connection Null\n");
         exit(1);
     }
@@ -415,11 +438,13 @@ void listen () {
                             DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
 
     if (dbus_error_is_set(&err)) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Name Error (%s)\n", err.message);
         dbus_error_free(&err);
     }
 
     if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret) {
+        printf(APPMAN_DEBUG_PREFIX);
         fprintf(stderr, "Not Primary Owner (%d)\n", ret);
         exit(1);
     }
@@ -434,14 +459,16 @@ void listen () {
             continue;
         }
 #ifdef DEBUG
-        printf("--APPMAND-COMING-DBUS-MESSAGE----\n");
-        printf("Sender: %s\n", dbus_message_get_sender(msg));
-        printf("Type: %d\n", dbus_message_get_type(msg));
-        printf("Path: %s\n", dbus_message_get_path(msg));
-        printf("Interface: %s\n", dbus_message_get_interface(msg));
-        printf("Member: %s\n", dbus_message_get_member(msg));
-        printf("Destination: %s\n", dbus_message_get_destination(msg));
-        printf("Signature: %s\n", dbus_message_get_signature(msg));
+        printf(APPMAN_DEBUG_PREFIX"Coming dbus message...\n");
+        printf(APPMAN_DEBUG_PREFIX"-------------------------\n");
+        printf(APPMAN_DEBUG_PREFIX"Sender: %s\n", dbus_message_get_sender(msg));
+        printf(APPMAN_DEBUG_PREFIX"Type: %d\n", dbus_message_get_type(msg));
+        printf(APPMAN_DEBUG_PREFIX"Path: %s\n", dbus_message_get_path(msg));
+        printf(APPMAN_DEBUG_PREFIX"Interface: %s\n", dbus_message_get_interface(msg));
+        printf(APPMAN_DEBUG_PREFIX"Member: %s\n", dbus_message_get_member(msg));
+        printf(APPMAN_DEBUG_PREFIX"Destination: %s\n", dbus_message_get_destination(msg));
+        printf(APPMAN_DEBUG_PREFIX"Signature: %s\n", dbus_message_get_signature(msg));
+        printf(APPMAN_DEBUG_PREFIX"-------------------------\n");
         fflush(stdout);
 #endif /* DEBUG */
         
@@ -453,16 +480,16 @@ void listen () {
         } 
 #ifdef DEBUG
         else {
+            printf(APPMAN_DEBUG_PREFIX);
             printf("Coming message is not a method call.\n");
-            fflush(stdout);
             char* sigvalue;
             DBusMessageIter args;        
             dbus_message_iter_init(msg, &args);
             dbus_message_iter_get_basic(&args, &sigvalue);
+            printf(APPMAN_DEBUG_PREFIX);
             printf("Got Signal with value %s\n", sigvalue);
+            fflush(stdout);
         }
-        printf("---------------------------------\n");
-        fflush(stdout);
 #endif /* DEBUG */
 
         /* Free the message. */
@@ -502,6 +529,7 @@ void status_handler(int pid, int status) {
     if (WIFEXITED(status)) {
         kill_order = true;
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("terminated normally %d\n", pid);
         fflush(stdout);
 #endif /* DEBUG */
@@ -511,6 +539,7 @@ void status_handler(int pid, int status) {
     else if (WIFSIGNALED(status)) {
         kill_order = true;
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("terminated by signal %d\n", pid);
         fflush(stdout);
 #endif /* DEBUG */        
@@ -519,6 +548,7 @@ void status_handler(int pid, int status) {
     else if (WCOREDUMP(status)) {
         kill_order = true;
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("produced a core dump %d\n", pid);
         fflush(stdout);
 #endif /* DEBUG */ 
@@ -527,6 +557,7 @@ void status_handler(int pid, int status) {
     else if (WIFSTOPPED(status)) {
         kill_order = true;
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("stopped by signal %d\n", pid);
         fflush(stdout);
 #endif /* DEBUG */
@@ -534,6 +565,7 @@ void status_handler(int pid, int status) {
     /* Other conditions. */
     else {
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("anything then handled reasons %d\n", pid);
         fflush(stdout);
 #endif /* DEBUG */
@@ -546,6 +578,7 @@ void status_handler(int pid, int status) {
                 /* Find which running app has changed its states. */
                 if (pid == LIVEAPPS[i]->pid) {
 #ifdef DEBUG
+                    printf(APPMAN_DEBUG_PREFIX);
                     printf("%s is going to shutdown\n", LIVEAPPS[i]->prettyname);
                     fflush(stdout);
 #endif /* DEBUG */
@@ -557,6 +590,7 @@ void status_handler(int pid, int status) {
             
             int ret = kill(appman_view_pid, SIGCONT);
             if (ret != 0) {
+                printf(APPMAN_DEBUG_PREFIX);
                 printf("Could not send a SIGCONT to pid:%d\n", appman_view_pid);
                 fflush(stdout);
             }
@@ -572,6 +606,7 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
     int rc;
 
 #ifdef DEBUG
+    printf(APPMAN_DEBUG_PREFIX);
     printf("Signal %d received:\n"
             "si_errno %d\n"    /* An errno value */
             "si_code %s\n",     /* Signal code */
@@ -583,6 +618,7 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
 
     if (signo == SIGCHLD) {
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf( "si_pid %d\n"      /* Sending process ID */
                 "si_uid %d\n"     /* Real user ID of sending process */
                 "si_status %d\n"   /* Exit value or signal */
@@ -659,6 +695,7 @@ int main (int argc, char *argv[]) {
         rc = waitpid((pid_t)(-1), &status, 0);
 
 #ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
         printf("Returned waitpid from main loop:%d\n", rc);
         fflush(stdout);
 #endif /* DEBUG */
