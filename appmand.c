@@ -607,9 +607,9 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
 
 #ifdef DEBUG
     printf(APPMAN_DEBUG_PREFIX);
-    printf("Signal %d received:\n"
-            "si_errno %d\n"    /* An errno value */
-            "si_code %s\n",     /* Signal code */
+    printf("Signal %d received. "
+            "si_errno %d, "    /* An errno value */
+            "si_code %s.\n",     /* Signal code */
             signo,
             info->si_errno,
             reasonstr(signo, info->si_code));
@@ -619,11 +619,11 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
     if (signo == SIGCHLD) {
 #ifdef DEBUG
         printf(APPMAN_DEBUG_PREFIX);
-        printf( "si_pid %d\n"      /* Sending process ID */
-                "si_uid %d\n"     /* Real user ID of sending process */
-                "si_status %d\n"   /* Exit value or signal */
-                "si_utime %ld\n"    /* User time consumed */
-                "si_stime %ld\n",   /* System time consumed */
+        printf( "si_pid %d, "      /* Sending process ID */
+                "si_uid %d, "     /* Real user ID of sending process */
+                "si_status %d, "   /* Exit value or signal */
+                "si_utime %ld, "    /* User time consumed */
+                "si_stime %ld.\n",   /* System time consumed */
                 info->si_pid,
                 info->si_uid,
                 info->si_status,

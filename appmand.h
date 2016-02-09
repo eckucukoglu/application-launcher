@@ -131,5 +131,6 @@ application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS];
 unsigned int number_of_live_applications = 0;
 /* Process id of a appman view. */
 pid_t appman_view_pid = 0;
+bool appman_view_is_close = true;
 
 #endif  /* not defined _APPMAND_H_ */
