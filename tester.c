@@ -176,7 +176,7 @@ void query_listapps() {
         printf(APPMAN_VIEW_DEBUG_PREFIX);
         fprintf(stderr, "Reply Null\n"); 
         exit(1); 
-    }uraya atabili
+    }
     
     // free the pending message handle
     dbus_pending_call_unref(pending);
@@ -377,7 +377,6 @@ void query_access(int access_code) {
     DBusConnection* conn;
     DBusError err;
     int ret;
-    dbus_uint32_t run_ret;
 
     printf(APPMAN_VIEW_DEBUG_PREFIX);
     printf("Calling pinvalid method.\n");
@@ -418,9 +417,9 @@ void query_access(int access_code) {
 
     // create a new method call and check for errors
     msg = dbus_message_new_method_call("appman.method.server", // target for the method call
-                                "/appman/method/Object", // object to call on
-                                "appman.method.Type", // interface to call on
-                                "pinvalid"); // method name
+                                    "/appman/method/Object", // object to call on
+                                    "appman.method.Type", // interface to call on
+                                    "pinvalid"); // method name
                   
     if (!msg) { 
         printf(APPMAN_VIEW_DEBUG_PREFIX);
