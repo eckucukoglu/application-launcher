@@ -27,7 +27,7 @@ const char *reasonstr(int signal, int code) {
     return "unknown";
 }
 
-pid_t run_appman_view() {
+pid_t run (const char *path, const char *name) {
     int rc;
     pid_t pid = fork();
 
@@ -35,15 +35,15 @@ pid_t run_appman_view() {
 
 #ifdef DEBUG
         printf(APPMAN_DEBUG_PREFIX);
-        printf("Child process is going to execute %s\n", APPMAN_VIEW);
+        printf("Child process is going to execute %s\n", name);
         fflush(stdout);
 #endif /* DEBUG */
 
-        rc = execl(APPMAN_VIEW_PATH, APPMAN_VIEW, (char*)NULL);
+        rc = execl(path, name, (char*)NULL);
 
         if (rc == -1) {
             sleep(1);
-            handle_error("Could not run APPMAN_VIEW");
+            handle_error("Could not execl");
         }
     } else if (pid < 0) {
         handle_error("fork");
@@ -51,7 +51,7 @@ pid_t run_appman_view() {
     
 #ifdef DEBUG
     printf(APPMAN_DEBUG_PREFIX);
-    printf("APPMAN VIEW launched with pid:%d\n", pid);
+    printf("%s launched with pid:%d\n", name, pid);
     fflush(stdout);
 #endif /* DEBUG */
     
@@ -117,11 +117,10 @@ void json_to_application (char *text, int index) {
 	    }
 	    
 	    // TODO: Assign default values if exists.
-	    
-	    APPLIST[index].id = id;
+        APPLIST[index].id = id;
         APPLIST[index].path = fields[1];
-		APPLIST[index].name = fields[2];
-		APPLIST[index].group = fields[3];
+        APPLIST[index].name = fields[2];
+        APPLIST[index].group = fields[3];
         APPLIST[index].prettyname = fields[4];
         APPLIST[index].iconpath = fields[5];
         APPLIST[index].color = fields[6];
@@ -204,7 +203,6 @@ int get_applist() {
         fclose(file);
     }
 
-
     /* Close the directory. */
     if (closedir (d)) {
         printf(APPMAN_DEBUG_PREFIX);
@@ -216,10 +214,8 @@ int get_applist() {
     return 0;
 }
 
-int run_app (int appid) {
-    int rc;
-    int i;
-    int appindex = -1;
+int runapp (int appid) {
+    int i, appindex = -1;
 
     if (number_of_live_applications >= MAX_NUMBER_LIVE_APPLICATIONS) {
 #ifdef DEBUG
@@ -238,32 +234,11 @@ int run_app (int appid) {
         }
     }
     
-    if (appindex == -1) {
+    if (appindex == -1)
         return -1;
-    }
 
-    pid_t pid = fork();
+    pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
 
-    if (pid == 0) {
-        /* TODO: Set application group settings. */
-
-#ifdef DEBUG
-        printf(APPMAN_DEBUG_PREFIX);
-        printf("Child process is going to execute %s\n",
-                APPLIST[appindex].name);
-        fflush(stdout);
-#endif /* DEBUG */
-
-        rc = execl(APPLIST[appindex].path,
-                APPLIST[appindex].name, (char*)NULL);
-
-        if (rc == -1) {
-            handle_error("execl");
-        }
-    } else if (pid < 0) {
-        return -1;
-    }
-    
     /* Suspend APPMAN view. */
     int kill_ret = kill(appman_view_pid, SIGSTOP);
     if (kill_ret != 0) {
@@ -272,8 +247,6 @@ int run_app (int appid) {
         fflush(stdout);
     }
 
-    /* TODO: Do we need to clear fb? */
-    
     APPLIST[appindex].pid = pid;
     LIVEAPPS[number_of_live_applications] = &APPLIST[appindex];
     number_of_live_applications++;
@@ -315,7 +288,7 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
 #endif /* DEBUG */
 
         /* Run the corresponding application */
-        rc = run_app(app_id);
+        rc = runapp(app_id);
         if (rc == 0) {
             /* Signal the condition variable that application has executed. */
             pthread_mutex_lock(&mutex);
@@ -409,6 +382,45 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
+void login_access (DBusMessage* msg, DBusConnection* conn) {
+    DBusMessageIter args;
+    dbus_uint32_t access_code;
+    
+    /* Read the arguments. */
+    if (!dbus_message_iter_init(msg, &args)) {
+#ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
+        fprintf(stderr, "Message has no arguments!\n");
+        fflush(stderr);
+#endif /* DEBUG */
+    }
+    else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
+#ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
+        fprintf(stderr, "Argument is not integer!\n");
+        fflush(stderr);
+#endif /* DEBUG */
+    }
+    else {
+        dbus_message_iter_get_basic(&args, &access_code);
+        
+#ifdef DEBUG
+        printf(APPMAN_DEBUG_PREFIX);
+        printf("Login access code: %d\n", access_code);
+        fflush(stdout);
+#endif /* DEBUG */
+
+        if (access_code == 0) {
+            int ret = kill(appman_login_pid, SIGTERM);
+            if (ret != 0) {
+                printf(APPMAN_DEBUG_PREFIX);
+                printf("Could not send a SIGTERM to pid:%d\n", appman_login_pid);
+                fflush(stdout);
+            }
+        }
+    }
+}
+
 void listen () {
     DBusMessage* msg;
     DBusConnection* conn;
@@ -435,7 +447,7 @@ void listen () {
 
     /* Request our name on the bus and check for errors. */
     ret = dbus_bus_request_name(conn, "appman.method.server",
-                            DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
+                                DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
 
     if (dbus_error_is_set(&err)) {
         printf(APPMAN_DEBUG_PREFIX);
@@ -477,7 +489,9 @@ void listen () {
             reply_runapp(msg, conn);
         } else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
             reply_listapps(msg, conn);
-        } 
+        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "access")) {
+            login_access(msg, conn);
+        }
 #ifdef DEBUG
         else {
             printf(APPMAN_DEBUG_PREFIX);
@@ -498,8 +512,6 @@ void listen () {
 
     /* Close the connection. */
     dbus_connection_close(conn);
-    // TODO: should i close connection here?
-    
     dbus_connection_unref(conn);
 }
 
@@ -573,7 +585,10 @@ void status_handler(int pid, int status) {
     
     if (kill_order) {
         
-        if (pid != appman_view_pid) {
+        if (pid == appman_view_pid || pid == appman_login_pid) {
+            /* Then restart appman view. */
+            appman_view_pid = run(APPMAN_VIEW_PATH, APPMAN_VIEW);
+        } else if (pid != appman_view_pid) {
             for (i = 0; i < MAX_NUMBER_LIVE_APPLICATIONS; i++) {
                 /* Find which running app has changed its states. */
                 if (pid == LIVEAPPS[i]->pid) {
@@ -594,9 +609,6 @@ void status_handler(int pid, int status) {
                 printf("Could not send a SIGCONT to pid:%d\n", appman_view_pid);
                 fflush(stdout);
             }
-        } else {
-            /* Then restart appman view. */
-            appman_view_pid = run_appman_view();
         }
     }
 }
@@ -683,8 +695,8 @@ int main (int argc, char *argv[]) {
     /* Time for thread initializations. */
     sleep(1);
     
-    /* Start the appman view. */
-    appman_view_pid = run_appman_view();
+    /* Start the appman login. */
+    appman_login_pid = run(APPMAN_LOGIN_PATH, APPMAN_LOGIN);
     
     /*
      * Infinite loop of process waits. If there are processes

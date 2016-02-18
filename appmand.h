@@ -21,6 +21,10 @@
 #define MAX_NUMBER_LIVE_APPLICATIONS 1
 /* Manifest storage. */
 #define MANIFEST_DIR "/etc/appmand/"
+
+/* Qt application that controls login. */
+#define APPMAN_LOGIN_PATH "/usr/bin/LoginScreen"
+#define APPMAN_LOGIN "LoginScreen"
 /* Qt application that leads appman daemon. */
 #define APPMAN_VIEW_PATH "/usr/bin/DesktopScreen"
 #define APPMAN_VIEW "DesktopScreen"
@@ -64,16 +68,15 @@ typedef struct application {
     char* prettyname;
     char* iconpath;
     char* color;
-    pid_t pid; /* -1 unless it is running. */
+    pid_t pid; /* in case of need, -1 until first run. */
 } application;
 
 const char *reasonstr(int, int);
 
 /*
- * Forks and execs appman view.
- * Returns pid of a child.
+ * Forks, execs and returns pid of a child.
  */
-pid_t run_appman_view();
+pid_t run (const char *, const char *);
 
 /*
  * Convert json data to application structure.
@@ -87,9 +90,9 @@ void json_to_application (char *, int);
 int get_applist();
 
 /*
- * Forks and execs application with the given id in child process.
+ * Runs application with the given id.
  */
-int run_app (int);
+int runapp (int);
 
 /*
  * Reply runapp request for dbus messages.
@@ -100,6 +103,11 @@ void reply_runapp (DBusMessage*, DBusConnection*);
  * Reply listapps request for dbus messages.
  */
 void reply_listapps (DBusMessage*, DBusConnection*);
+
+/*
+ * Action that triggered if valid pin supplied.
+ */
+void login_access (DBusMessage* msg, DBusConnection* conn);
 
 /*
  * Expose a method call and wait for it to be called.
@@ -125,12 +133,15 @@ void signal_handler (int, siginfo_t *, void *);
 application APPLIST[MAX_NUMBER_APPLICATIONS];
 /* Number of applications in the system. */
 unsigned int number_of_applications = 0;
+
 /* Running applications. */
 application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS];
 /* Number of running applications. */
 unsigned int number_of_live_applications = 0;
+
+/* Process id of a appman login. */
+pid_t appman_login_pid = 0;
 /* Process id of a appman view. */
 pid_t appman_view_pid = 0;
-bool appman_view_is_close = true;
 
 #endif  /* not defined _APPMAND_H_ */
