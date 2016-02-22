@@ -22,22 +22,20 @@ is a unique integer value, represent application.
 Manifest files have to contain application path, group (for cgroup), permissions values. Moreover, for UI applications also
 and application group respectively.
 
-*********************************************
-** example /etc/appman/0.mf                **
-**                                         **
-** {                                       **
-**   "id": 0,                              **
-**   "path": "/usr/bin/gnome-calculator",  **
-**   "cgroup": "group01",                  **
-**   "perms": [                            **
-**     "camera",                           **
-**     "bluetooth"                         **
-**   ],                                    **
-**   "prettyname": "Calculator",           **
-**   "iconpath": "cal-iconpath",           **
-**   "color": "#00000"                     **
-** }                                       **
-*********************************************
-
+Manifest example:
+```
+{
+  "id": 0,
+  "path": "/usr/bin/gnome-calculator",
+  "cgroup": "group01",
+  "perms": [
+    "camera",
+    "bluetooth"
+  ],
+  "prettyname": "Calculator",
+  "iconpath": "cal-iconpath",
+  "color": "#00000"
+}
+```
 * Note
 libdbus-1-dev is required for dbus functionality.
