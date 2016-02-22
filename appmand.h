@@ -107,27 +107,32 @@ void reply_listapps (DBusMessage*, DBusConnection*);
 /*
  * Action that triggered if valid pin supplied.
  */
-void login_access (DBusMessage* msg, DBusConnection* conn);
+void login_access (DBusMessage* msg);
+
+/*
+ * Updates application list.
+ */
+void updateapps();
 
 /*
  * Expose a method call and wait for it to be called.
  */
-void listen ();
+void listen();
 
 /*
  * Request handling with dbus.
  */
-void *request_handler (void *);
+void *request_handler(void *);
 
 /*
  * Handle termination status of child process.
  */
-void status_handler (int, int);
+void status_handler(int, int);
 
 /*
  * Signal handling for main process.
  */
-void signal_handler (int, siginfo_t *, void *);
+void signal_handler(int, siginfo_t *, void *);
 
 /* Application list. */
 application APPLIST[MAX_NUMBER_APPLICATIONS];

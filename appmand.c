@@ -382,7 +382,7 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
-void login_access (DBusMessage* msg, DBusConnection* conn) {
+void login_access (DBusMessage* msg) {
     DBusMessageIter args;
     dbus_uint32_t access_code;
     
@@ -421,7 +421,14 @@ void login_access (DBusMessage* msg, DBusConnection* conn) {
     }
 }
 
-void listen () {
+void updateapps () {
+    number_of_applications = 0;
+    if (get_applist()) {
+        handle_error("get_applist");
+    }
+}
+
+void listen() {
     DBusMessage* msg;
     DBusConnection* conn;
     DBusError err;
@@ -490,12 +497,14 @@ void listen () {
         } else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
             reply_listapps(msg, conn);
         } else if (dbus_message_is_method_call(msg, "appman.method.Type", "access")) {
-            login_access(msg, conn);
+            login_access(msg);
+        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "updateapps")) {
+            updateapps();
         }
 #ifdef DEBUG
         else {
             printf(APPMAN_DEBUG_PREFIX);
-            printf("Coming message is not a method call.\n");
+            printf("Unexpected message.\n");
             char* sigvalue;
             DBusMessageIter args;        
             dbus_message_iter_init(msg, &args);
@@ -671,7 +680,7 @@ int main (int argc, char *argv[]) {
         handle_error("malloc for thread_info");
     }
 
-    /* Fill application list, once per lifetime. */
+    /* Fill application list. */
     rc = get_applist();
     if (rc) {
         handle_error("get_applist");
