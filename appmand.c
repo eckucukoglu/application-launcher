@@ -170,7 +170,7 @@ int get_applist() {
         handle_error("opendir");
     }
 
-    while (!(entry = readdir(d)) && app_index < MAX_NUMBER_APPLICATIONS) {
+    while ((entry = readdir(d)) && app_index < MAX_NUMBER_APPLICATIONS) {
 
         if (!strcmp (entry->d_name, "."))
             continue;
@@ -220,7 +220,7 @@ int runapp (int appid) {
 
     if (number_of_live_applications >= MAX_NUMBER_LIVE_APPLICATIONS) {
 #ifdef DEBUG
-        printf(DEBUG_PREFIX"Reached permitted number of live apps\n");
+        printf(DEBUG_PREFIX"Reached permitted number of live apps.\n");
         fflush(stdout);
 #endif
         return -1;
@@ -574,8 +574,7 @@ int signal_sender (int pid, int signo, int app) {
     } else {
         ret = kill(pid, 0);
         if (ret == -1 && errno == ESRCH) {
-            printf(DEBUG_PREFIX);
-            printf("pid: %d not exists.\n", pid);
+            printf(DEBUG_PREFIX"pid: %d not exists.\n", pid);
             fflush(stdout);
             
             if (signo == SIGCONT) {
