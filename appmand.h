@@ -12,6 +12,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <unistd.h>
+#include <openssl/sha.h>
 #include "cJSON.h"
 
 #define NUMBER_OF_THREADS 1
@@ -22,14 +23,7 @@
 /* Manifest storage. */
 #define MANIFEST_DIR "/etc/appmand/"
 
-/* Qt application that controls login. */
-#define APPMAN_LOGIN_PATH "/usr/bin/LoginScreen"
-#define APPMAN_LOGIN "LoginScreen"
-/* Qt application that leads appman daemon. */
-#define APPMAN_VIEW_PATH "/usr/bin/DesktopScreen"
-#define APPMAN_VIEW "DesktopScreen"
-
-#define APPMAN_DEBUG_PREFIX "D >> "
+#define DEBUG_PREFIX "appmand: "
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);
@@ -38,6 +32,8 @@
         do { perror(msg); exit(EXIT_FAILURE); } while (0);
 
 typedef enum { false, true } bool;
+
+enum { LOGIN, VIEW };
 
 /*
  * Thread information.
@@ -54,24 +50,28 @@ typedef struct thread_info {
  * path         : execution path.
  * name         : application binary name.
  * group        : cgroup group name.
- * perms        : tbd.
  * prettyname   : pretty application name.
- * iconpath     : application icon's path.
- * color        : theme color.
+ * icon         : application icon.
+ * hash         : sha256 binary hash.
+ * pid          : process id of app.
  */
 typedef struct application {
     unsigned int id;
     char* path;
     char* name;
     char* group;
-    /* char* perms; */
     char* prettyname;
-    char* iconpath;
-    char* color;
+    char* icon;
+    char* hash;
     pid_t pid; /* in case of need, -1 until first run. */
 } application;
 
 const char *reasonstr(int, int);
+
+/*
+ * Compares binary sha256 hash w/ manifest hash value.
+ */
+bool application_integrity_check(int);
 
 /*
  * Forks, execs and returns pid of a child.
@@ -115,6 +115,11 @@ void login_access (DBusMessage* msg);
 void updateapps();
 
 /*
+ * Login application that asks for pin shows up.
+ */
+void lockscreen();
+
+/*
  * Expose a method call and wait for it to be called.
  */
 void listen();
@@ -123,6 +128,11 @@ void listen();
  * Request handling with dbus.
  */
 void *request_handler(void *);
+
+/*
+ * Send signal to process.
+ */
+int signal_sender (int, int, int);
 
 /*
  * Handle termination status of child process.
@@ -145,8 +155,8 @@ application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS];
 unsigned int number_of_live_applications = 0;
 
 /* Process id of a appman login. */
-pid_t appman_login_pid = 0;
+pid_t login_pid = 0;
 /* Process id of a appman view. */
-pid_t appman_view_pid = 0;
+pid_t view_pid = 0;
 
 #endif  /* not defined _APPMAND_H_ */
