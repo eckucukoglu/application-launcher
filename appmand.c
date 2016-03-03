@@ -85,50 +85,50 @@ pid_t run (const char *path, const char *name) {
 #ifdef DEBUG
     printf(DEBUG_PREFIX"%s(%d) launched.\n", name, pid);
     fflush(stdout);
-#endif /* DEBUG */
+#endif
     
     return pid;
 }
 
 void json_to_application (char *text, int index) {
-	cJSON *root, *child;
-	char* fields[7];
-	int i;
-	unsigned int id;
-	
-	root = cJSON_Parse(text);
-	
-	if (!root) {
+    cJSON *root, *child;
+    char* fields[7];
+    int i;
+    unsigned int id;
+    
+    root = cJSON_Parse(text);
+    
+    if (!root) {
         printf(DEBUG_PREFIX"cJSON error: %s.\n", cJSON_GetErrorPtr());
-	} else {
-	    char field_names[7][50] = {
-	        "id",
-	        "path",
+    } else {
+        char field_names[7][50] = {
+            "id",
+            "path",
             "name",
             "group",
             "prettyname",
             "icon",
             "hash"
-	    };
-	    
-	    i = 0;
-	    while (i < 7) {
-	        child = cJSON_GetObjectItem(root, field_names[i]);
-	        if (child != NULL) {
-	            if (i == 0)
-	                id = child->valueint;
-	            else {
-                    fields[i] = malloc(256);	            
-	                strcpy(fields[i], child->valuestring);
-	            }
-	        } else {
-	            printf(DEBUG_PREFIX"Can not find json object %s.\n", field_names[i]);
-	        }
-	        
-	        i++;
-	    }
-	    
-	    // TODO: Check exceptions, assign default.
+        };
+        
+        i = 0;
+        while (i < 7) {
+            child = cJSON_GetObjectItem(root, field_names[i]);
+            if (child != NULL) {
+                if (i == 0)
+                    id = child->valueint;
+                else {
+                    fields[i] = malloc(256);                
+                    strcpy(fields[i], child->valuestring);
+                }
+            } else {
+                printf(DEBUG_PREFIX"Can not find json object %s.\n", field_names[i]);
+            }
+            
+            i++;
+        }
+        
+        // TODO: Check exceptions, assign default.
         APPLIST[index].id = id;
         APPLIST[index].path = fields[1];
         APPLIST[index].name = fields[2];
@@ -144,14 +144,14 @@ void json_to_application (char *text, int index) {
         printf(DEBUG_PREFIX"%s(%d) found.\n", 
                APPLIST[index].prettyname, APPLIST[index].id);
         fflush(stdout);
-#endif /* DEBUG */
+#endif
 
-		cJSON_Delete(root);
-	}
+        cJSON_Delete(root);
+    }
 }
 
 int get_applist() {
-    DIR * d;
+    DIR *d;
     struct dirent *entry;
     FILE *file;
     long size;
@@ -558,7 +558,7 @@ void status_handler(int pid, int status) {
         signal_sender(view_pid, SIGCONT, VIEW);
     }
 }
-
+    
 int signal_sender (int pid, int signo, int app) {
     int ret = 0;
     
@@ -625,7 +625,7 @@ void signal_handler(int signo, siginfo_t *info, void *p) {
                 info->si_utime,
                 info->si_stime);
         fflush(stdout);
-#endif /* DEBUG */
+#endif
 
         /*
          * Multiple child processes could terminate
