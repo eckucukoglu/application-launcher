@@ -80,8 +80,9 @@ pid_t run (const char *, const char *);
 
 /*
  * Convert json data to application structure.
+ * Returns 0 if success.
  */
-void json_to_application (char *, int);
+int json_to_application (char *, int);
 
 /*
  * Reads application list from manifest directory.
@@ -91,6 +92,10 @@ int get_applist();
 
 /*
  * Runs application with the given id.
+ * Returns 0 if success.
+ *        -1 if reached maximum number of live apps.
+ *        -2 if application index does not exists.
+ *        -3 if integrity check fails.
  */
 int runapp (int);
 

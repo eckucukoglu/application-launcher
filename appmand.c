@@ -90,7 +90,7 @@ pid_t run (const char *path, const char *name) {
     return pid;
 }
 
-void json_to_application (char *text, int index) {
+int json_to_application (char *text, int index) {
     cJSON *root, *child;
     char* fields[7];
     int i;
@@ -100,6 +100,7 @@ void json_to_application (char *text, int index) {
     
     if (!root) {
         printf(DEBUG_PREFIX"cJSON error: %s.\n", cJSON_GetErrorPtr());
+        return -1;
     } else {
         char field_names[7][50] = {
             "id",
@@ -128,6 +129,13 @@ void json_to_application (char *text, int index) {
             i++;
         }
         
+        for (i = 0; i < index; i++) {
+            if (APPLIST[i].id == id) {
+                cJSON_Delete(root);
+                return -1;
+            }
+        }
+        
         // TODO: Check exceptions, assign default.
         APPLIST[index].id = id;
         APPLIST[index].path = fields[1];
@@ -138,16 +146,15 @@ void json_to_application (char *text, int index) {
         APPLIST[index].hash = fields[6];
         APPLIST[index].pid = -1;
         
-        number_of_applications++;
-        
 #ifdef DEBUG
         printf(DEBUG_PREFIX"%s(%d) found.\n", 
                APPLIST[index].prettyname, APPLIST[index].id);
         fflush(stdout);
 #endif
-
         cJSON_Delete(root);
     }
+    
+    return 0;
 }
 
 int get_applist() {
@@ -156,7 +163,6 @@ int get_applist() {
     FILE *file;
     long size;
     char *filecontent;
-    int app_index = 0;
     int ret;
 
     ret = chdir(MANIFEST_DIR);
@@ -170,7 +176,8 @@ int get_applist() {
         handle_error("opendir");
     }
 
-    while ((entry = readdir(d)) && app_index < MAX_NUMBER_APPLICATIONS) {
+    while ((entry = readdir(d)) && 
+            number_of_applications < MAX_NUMBER_APPLICATIONS) {
 
         if (!strcmp (entry->d_name, "."))
             continue;
@@ -200,8 +207,8 @@ int get_applist() {
             continue;
         }
         
-        json_to_application(filecontent, app_index);        
-        app_index++;
+        if (json_to_application(filecontent, number_of_applications) == 0)
+            number_of_applications++;
 
         free(filecontent);
         fclose(file);
@@ -235,11 +242,11 @@ int runapp (int appid) {
     }
     
     if (appindex == -1)
-        return -1;
+        return -2;
 
     if (!application_integrity_check(appindex)) {
         printf(DEBUG_PREFIX"Integrity check failed.\n");    
-        return -1;
+        return -3;
     }
 
     pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
@@ -379,7 +386,6 @@ void login_access (DBusMessage* msg) {
 }
 
 void updateapps () {
-    number_of_applications = 0;
     if (get_applist()) {
         handle_error("get_applist");
     }
