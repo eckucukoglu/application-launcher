@@ -259,11 +259,11 @@ int runapp (int appid) {
     return 0;
 }
 
-void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
+void startapp (DBusMessage* msg, DBusConnection* conn) {
     DBusMessage* reply;
     DBusMessageIter args;
     dbus_uint32_t serial = 0;
-    int rc;
+    int rc = -1;
     dbus_uint32_t app_id;
     
     /* Read the arguments. */
@@ -272,14 +272,12 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
         fprintf(stderr, DEBUG_PREFIX"dbus: message has no arguments.\n");
         fflush(stderr);
 #endif
-        rc = -1;
     }
     else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
 #ifdef DEBUG
         fprintf(stderr, DEBUG_PREFIX"dbus: argument is not integer.\n");
         fflush(stderr);
 #endif
-        rc = -1;
     }
     else {
         dbus_message_iter_get_basic(&args, &app_id);
@@ -312,7 +310,7 @@ void reply_runapp (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
-void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
+void listapps (DBusMessage* msg, DBusConnection* conn) {
     DBusMessage* reply;
     DBusMessageIter args, struct_i, array_i;
     dbus_uint32_t serial = 0;
@@ -358,7 +356,7 @@ void reply_listapps (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
-void login_access (DBusMessage* msg) {
+void login (DBusMessage* msg) {
     DBusMessageIter args;
     dbus_uint32_t access_code;
     
@@ -394,6 +392,10 @@ void updateapps () {
 void lockscreen() {
     signal_sender(view_pid, SIGSTOP, VIEW);
     signal_sender(login_pid, SIGCONT, LOGIN);
+}
+
+void removeapps(DBusMessage* msg, DBusConnection* conn) {
+    
 }
 
 void listen() {
@@ -456,16 +458,23 @@ void listen() {
 #endif
         
         /* Check this is a method call for the right interface & method. */
-        if (dbus_message_is_method_call(msg, "appman.method.Type", "runapp")) {
-            reply_runapp(msg, conn);
-        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
-            reply_listapps(msg, conn);
-        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "access")) {
-            login_access(msg);
-        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "updateapps")) {
+        if (dbus_message_is_method_call(msg, "appman.method.Type", "startapp")) {
+            startapp(msg, conn);
+        } 
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "listapps")) {
+            listapps(msg, conn);
+        } 
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "login")) {
+            login(msg);
+        } 
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "updateapps")) {
             updateapps();
-        } else if (dbus_message_is_method_call(msg, "appman.method.Type", "lockscreen")) {
+        } 
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "lockscreen")) {
             lockscreen();
+        } 
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "removeapps")) {
+            removeapps(msg, conn);
         }
 #ifdef DEBUG
         else {

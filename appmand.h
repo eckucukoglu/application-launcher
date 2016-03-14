@@ -63,7 +63,7 @@ typedef struct application {
     char* prettyname;
     char* icon;
     char* hash;
-    pid_t pid; /* in case of need, -1 until first run. */
+    pid_t pid; /* in case of demand, -1 until first run. */
 } application;
 
 const char *reasonstr(int, int);
@@ -102,17 +102,17 @@ int runapp (int);
 /*
  * Reply runapp request for dbus messages.
  */
-void reply_runapp (DBusMessage*, DBusConnection*);
+void startapp (DBusMessage*, DBusConnection*);
 
 /*
  * Reply listapps request for dbus messages.
  */
-void reply_listapps (DBusMessage*, DBusConnection*);
+void listapps (DBusMessage*, DBusConnection*);
 
 /*
  * Action that triggered if valid pin supplied.
  */
-void login_access (DBusMessage* msg);
+void login (DBusMessage* msg);
 
 /*
  * Updates application list.
@@ -123,6 +123,11 @@ void updateapps();
  * Login application that asks for pin shows up.
  */
 void lockscreen();
+
+/*
+ * Remove applications from system. (i.e. remove manifest and binaries.)
+ */
+void removeapps(DBusMessage* msg, DBusConnection* conn);
 
 /*
  * Expose a method call and wait for it to be called.

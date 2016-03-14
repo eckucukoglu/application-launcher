@@ -24,8 +24,8 @@ debug: all
 cJSON.o: cJSON.c cJSON.h
 	$(CC) $(CFLAGS) -c cJSON.c
 
-tester: tester.c
-	$(CC) $(CFLAGS) $(DBUS_INCLUDE) -o $(TESTER) tester.c $(LIBS)
+tester: test/tester.c test/tester.h
+	$(CC) $(CFLAGS) $(DBUS_INCLUDE) -o $(TESTER) test/tester.c $(LIBS)
 
 clean:
 	rm -f *.o

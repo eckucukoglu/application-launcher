@@ -1,22 +1,4 @@
-#define DBUS_API_SUBJECT_TO_CHANGE
-#include <dbus/dbus.h>
-#include <stdbool.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#define MAX_NUMBER_APPLICATIONS 50
-#define DEBUG_PREFIX "tester: "
-
-typedef struct application {
-    unsigned int id;
-    char* prettyname;
-    char* icon;
-} application;
-
-unsigned int number_of_applications = 0;
-application APPLIST[MAX_NUMBER_APPLICATIONS];
+#include "tester.h"
 
 void assert_dbus_method_return (DBusMessage* msg) {
     DBusMessageIter args;
@@ -74,9 +56,6 @@ void assert_dbus_method_return (DBusMessage* msg) {
     }
 }
 
-/**
- * Call a listapps method on a remote object.
- */
 void query_listapps() {
     DBusMessage* msg;
     DBusMessageIter args, arrayIter, structIter;
@@ -206,10 +185,7 @@ void query_listapps() {
     dbus_connection_unref(conn);
 }
 
-/**
- * Call a runapp method on a remote object.
- */
-void query_runapp(int app_id) {
+void query_startapp(int app_id) {
     DBusMessage* msg;
     DBusMessageIter args;
     DBusConnection* conn;
@@ -252,7 +228,7 @@ void query_runapp(int app_id) {
     msg = dbus_message_new_method_call("appman.method.server", // target for the method call
                   "/appman/method/Object", // object to call on
                   "appman.method.Type", // interface to call on
-                  "runapp"); // method name
+                  "startapp"); // method name
                   
     if (!msg) { 
         fprintf(stderr, DEBUG_PREFIX"dbus: null message.\n");
@@ -311,10 +287,7 @@ void query_runapp(int app_id) {
     dbus_connection_unref(conn);
 }
 
-/**
- * Call a access method on a remote object.
- */
-void query_access(int access_code) {
+void query_login(int access_code) {
     DBusMessage* msg;
     DBusMessageIter args;
     DBusConnection* conn;
@@ -355,7 +328,7 @@ void query_access(int access_code) {
     msg = dbus_message_new_method_call("appman.method.server", // target for the method call
                                     "/appman/method/Object", // object to call on
                                     "appman.method.Type", // interface to call on
-                                    "access"); // method name
+                                    "login"); // method name
                   
     if (!msg) { 
         fprintf(stderr, DEBUG_PREFIX"dbus: null message.\n");
@@ -381,9 +354,6 @@ void query_access(int access_code) {
     dbus_connection_unref(conn);
 }
 
-/**
- * Call updateapps method on a remote object.
- */
 void query_updateapps() {
     DBusMessage* msg;
     DBusConnection* conn;
@@ -443,9 +413,6 @@ void query_updateapps() {
     dbus_connection_unref(conn);
 }
 
-/**
- * Call lockscreen method on a remote object.
- */
 void query_lockscreen() {
     DBusMessage* msg;
     DBusConnection* conn;
@@ -505,21 +472,39 @@ void query_lockscreen() {
     dbus_connection_unref(conn);
 }
 
+void query_removeapps(int* apps, int size) {
+
+
+}
+
 int main(int argc, char** argv) {
 
-    if (argv[1] != NULL && strcmp("runapp", argv[1]) == 0 && argv[2] != NULL)
-        query_runapp(atoi(argv[2]));
-    else if (argv[1] != NULL && strcmp(argv[1], "listapps") == 0)
-        query_listapps();
-    else if (argv[1] != NULL && strcmp(argv[1], "access") == 0)
-        query_access(0);
-    else if (argv[1] != NULL && strcmp(argv[1], "updateapps") == 0)
-        query_updateapps();
-    else if (argv[1] != NULL && strcmp(argv[1], "lockscreen") == 0)
-        query_lockscreen();
-    else {
-        printf ("Syntax: %s [runapp|listapps|access|updateapps|lockscreen] [<param>]\n", argv[0]);
-        return 1;
+    if (argv[1] != NULL) {
+        if (strcmp("startapp", argv[1]) == 0 && argv[2])
+            query_startapp(atoi(argv[2]));
+        else if (strcmp(argv[1], "listapps") == 0)
+            query_listapps();
+        else if (strcmp(argv[1], "login") == 0)
+            query_login(0);
+        else if (strcmp(argv[1], "updateapps") == 0)
+            query_updateapps();
+        else if (strcmp(argv[1], "lockscreen") == 0)
+            query_lockscreen();
+        else if (strcmp(argv[1], "removeapps") == 0) {
+            int i, size = 4;
+            int* apps_to_remove = malloc(sizeof(int) * size);
+            for (i = 0; i < size; i++) {
+                apps_to_remove[i] = 100 + (i * size);
+            }        
+        
+            query_removeapps(apps_to_remove, size);
+        }
+        else {
+            printf ("Syntax: %s [startapp|listapps|login| \
+                    updateapps|lockscreen|removeapps] [<param>]\n", argv[0]);
+            return 1;
+        }    
+    
     }
 
     return 0;
