@@ -1,3 +1,6 @@
+#ifndef _TESTER_H_
+#define _TESTER_H_
+
 #define DBUS_API_SUBJECT_TO_CHANGE
 #include <dbus/dbus.h>
 #include <stdbool.h>
@@ -19,10 +22,12 @@ void assert_dbus_method_return (DBusMessage* msg);
 
 void query_startapp(int app_id);
 void query_listapps();
+void query_removeapps(int* apps, int size);
 void query_login(int access_code);
 void query_updateapps();
 void query_lockscreen();
-void query_removeapps(int* apps, int size);
 
 unsigned int number_of_applications = 0;
 application APPLIST[MAX_NUMBER_APPLICATIONS];
+
+#endif /* not defined _TESTER_H_ */

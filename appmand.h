@@ -15,24 +15,19 @@
 #include <openssl/sha.h>
 #include "cJSON.h"
 
-#define NUMBER_OF_THREADS 1
-/* Maximum number of applications. */
-#define MAX_NUMBER_APPLICATIONS 50
-/* Maximum number of running applications. */
-#define MAX_NUMBER_LIVE_APPLICATIONS 1
-/* Manifest storage. */
-#define MANIFEST_DIR "/etc/appmand/"
+#define NUMBER_OF_THREADS 1 /* Thread number to handle requests. */
+#define MAX_NUMBER_APPLICATIONS 50 /* Maximum number of applications. */
+#define MAX_NUMBER_LIVE_APPLICATIONS 1 /* Maximum number of running applications. */
+#define MANIFEST_DIR "/etc/appmand/" /* Manifest storage. */
 
 #define DEBUG_PREFIX "appmand: "
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0);
-
 #define handle_error(msg) \
         do { perror(msg); exit(EXIT_FAILURE); } while (0);
 
 typedef enum { false, true } bool;
-
 enum { LOGIN, VIEW };
 
 /*
@@ -66,16 +61,13 @@ typedef struct application {
     pid_t pid; /* in case of demand, -1 until first run. */
 } application;
 
+/* String expression of signal code. */
 const char *reasonstr(int, int);
 
-/*
- * Compares binary sha256 hash w/ manifest hash value.
- */
+/* Compares binary sha256 hash w/ manifest hash value. */
 bool application_integrity_check(int);
 
-/*
- * Forks, execs and returns pid of a child.
- */
+/* Forks, execs and returns pid of a child. */
 pid_t run (const char *, const char *);
 
 /*
@@ -86,7 +78,7 @@ int json_to_application (char *, int);
 
 /*
  * Reads application list from manifest directory.
- * Returns 0 on success.
+ * Returns 0 if success.
  */
 int get_applist();
 
@@ -100,73 +92,42 @@ int get_applist();
 int runapp (int);
 
 /*
- * Reply runapp request for dbus messages.
+ * DBUS METHODS TO SERVE
+ * ---------------------
+ * startapp: Start application.
+ * listapps: Return applications.
+ * removeapps: Remove applications from system.
+ * login: Bypass 'login' if 'success' access code received.
+ * updateapps: Update application list.
+ * lockscreen: Run 'login' application that asks pin.
  */
 void startapp (DBusMessage*, DBusConnection*);
-
-/*
- * Reply listapps request for dbus messages.
- */
 void listapps (DBusMessage*, DBusConnection*);
-
-/*
- * Action that triggered if valid pin supplied.
- */
+void removeapps(DBusMessage* msg, DBusConnection* conn);
 void login (DBusMessage* msg);
-
-/*
- * Updates application list.
- */
 void updateapps();
-
-/*
- * Login application that asks for pin shows up.
- */
 void lockscreen();
 
-/*
- * Remove applications from system. (i.e. remove manifest and binaries.)
- */
-void removeapps(DBusMessage* msg, DBusConnection* conn);
-
-/*
- * Expose a method call and wait for it to be called.
- */
+/* Expose a method call and wait for it to be called. */
 void listen();
 
-/*
- * Request handling with dbus.
- */
+/* Request handling with dbus. */
 void *request_handler(void *);
 
-/*
- * Send signal to process.
- */
+/* Send signal to process. */
 int signal_sender (int, int, int);
 
-/*
- * Handle termination status of child process.
- */
+/* Handle termination status of child process. */
 void status_handler(int, int);
 
-/*
- * Signal handling for main process.
- */
+/* Signal handling for main process. */
 void signal_handler(int, siginfo_t *, void *);
 
-/* Application list. */
-application APPLIST[MAX_NUMBER_APPLICATIONS];
-/* Number of applications in the system. */
-unsigned int number_of_applications = 0;
-
-/* Running applications. */
-application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS];
-/* Number of running applications. */
-unsigned int number_of_live_applications = 0;
-
-/* Process id of a appman login. */
-pid_t login_pid = 0;
-/* Process id of a appman view. */
-pid_t view_pid = 0;
+application APPLIST[MAX_NUMBER_APPLICATIONS]; /* Application list. */
+unsigned int number_of_applications = 0; /* Number of applications. */
+application *LIVEAPPS[MAX_NUMBER_LIVE_APPLICATIONS]; /* Running applications. */
+unsigned int number_of_live_applications = 0; /* Number of running applications. */
+pid_t login_pid = 0; /* Process id of a appman login. */
+pid_t view_pid = 0; /* Process id of a appman view. */
 
 #endif  /* not defined _APPMAND_H_ */

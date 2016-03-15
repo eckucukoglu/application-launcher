@@ -356,7 +356,81 @@ void listapps (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
-void login (DBusMessage* msg) {
+void removeapps(DBusMessage* msg, DBusConnection* conn) {
+    DBusMessage* reply;
+    DBusMessageIter args, arrayIter;
+    dbus_uint_t serial = 0;
+    int number_of_apps_to_remove = 0;
+    int number_of_apps_removed = 0;
+    int app_ids_to_remove[MAX_NUMBER_APPLICATIONS];
+    int app_ids_removed[MAX_NUMBER_APPLICATIONS];
+    int i;
+    
+    /* 
+     * Read the arguments.
+     * number of applications to remove, and array of application ids
+     * for applications.
+     */
+    if (!dbus_message_iter_init(msg, &args)) {
+#ifdef DEBUG
+        fprintf(stderr, DEBUG_PREFIX"dbus: message has no arguments.\n");
+        fflush(stderr);
+#endif   
+    } else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
+#ifdef DEBUG
+        fprintf(stderr, DEBUG_PREFIX"dbus: argument is not integer.\n");
+        fflush(stderr);
+#endif    
+    } else
+        dbus_message_iter_get_basic(&args, &number_of_apps_to_remove);
+    
+    
+    if (!dbus_message_iter_next(&args)) {
+#ifdef DEBUG
+        fprintf(stderr, DEBUG_PREFIX"dbus: message has no arguments.\n");
+        fflush(stderr);
+#endif  
+    } else if (DBUS_TYPE_ARRAY != dbus_message_iter_get_arg_type(&args)) {
+#ifdef DEBUG
+        fprintf(stderr, DEBUG_PREFIX"dbus: argument is not array.\n");
+        fflush(stderr);
+#endif
+    } else {
+        dbus_message_iter_recurse(&args, &arrayIter);
+        
+        for (i = 0; i < number_of_apps_to_remove; ++i) {
+            if (DBUS_TYPE_UINT32 == dbus_message_iter_get_arg_type(&arrayIter)) {
+                dbus_message_iter_get_basic(&arrayIter, app_ids_to_remove+i);
+            }
+        
+            dbus_message_iter_next(&arrayIter);
+        }
+    }
+    
+    /* Remove applications. */
+    // TODO:
+    
+    
+    /* Create a reply. */
+    reply = dbus_message_new_method_return(msg);
+    dbus_message_iter_init_append(reply, &args);
+    
+    if (!dbus_message_iter_append_basic(&args, )) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: out of memory.\n");
+    }
+    // TODO: append arguments
+    
+    
+    /* Send the reply. */
+    if (!dbus_connection_send(conn, reply, &serial)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: send error.\n");
+    }
+    
+    dbus_connection_flush(conn);
+    dbus_message_unref(reply);
+}
+
+void login(DBusMessage* msg) {
     DBusMessageIter args;
     dbus_uint32_t access_code;
     
@@ -392,10 +466,6 @@ void updateapps () {
 void lockscreen() {
     signal_sender(view_pid, SIGSTOP, VIEW);
     signal_sender(login_pid, SIGCONT, LOGIN);
-}
-
-void removeapps(DBusMessage* msg, DBusConnection* conn) {
-    
 }
 
 void listen() {
