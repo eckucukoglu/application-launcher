@@ -22,7 +22,7 @@ void assert_dbus_method_return (DBusMessage* msg);
 
 void query_startapp(int app_id);
 void query_listapps();
-void query_removeapps(int* apps, int size);
+void query_uninstallapps(unsigned int* app_ids, int size);
 void query_login(int access_code);
 void query_updateapps();
 void query_lockscreen();

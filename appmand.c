@@ -157,6 +157,12 @@ int json_to_application (char *text, int index) {
     return 0;
 }
 
+int removeapp(int app_id) {
+    // TODO:
+
+    return app_id;
+}
+
 int get_applist() {
     DIR *d;
     struct dirent *entry;
@@ -356,15 +362,15 @@ void listapps (DBusMessage* msg, DBusConnection* conn) {
     dbus_message_unref(reply);
 }
 
-void removeapps(DBusMessage* msg, DBusConnection* conn) {
+void uninstallapps(DBusMessage* msg, DBusConnection* conn) {
     DBusMessage* reply;
     DBusMessageIter args, arrayIter;
-    dbus_uint_t serial = 0;
+    dbus_uint32_t serial = 0;
     int number_of_apps_to_remove = 0;
     int number_of_apps_removed = 0;
     int app_ids_to_remove[MAX_NUMBER_APPLICATIONS];
     int app_ids_removed[MAX_NUMBER_APPLICATIONS];
-    int i;
+    int i, ret;
     
     /* 
      * Read the arguments.
@@ -396,7 +402,7 @@ void removeapps(DBusMessage* msg, DBusConnection* conn) {
         fflush(stderr);
 #endif
     } else {
-        dbus_message_iter_recurse(&args, &arrayIter);
+        dbus_message_iter_recurse (&args, &arrayIter);
         
         for (i = 0; i < number_of_apps_to_remove; ++i) {
             if (DBUS_TYPE_UINT32 == dbus_message_iter_get_arg_type(&arrayIter)) {
@@ -406,20 +412,55 @@ void removeapps(DBusMessage* msg, DBusConnection* conn) {
             dbus_message_iter_next(&arrayIter);
         }
     }
-    
+#ifdef DEBUG
+    printf(DEBUG_PREFIX"Removing %d applications: ", number_of_apps_to_remove);
+    for (i = 0; i < number_of_apps_to_remove; ++i) {
+        printf("%d ", app_ids_to_remove[i]);
+    }
+    printf("\n");
+    fflush(stdout);
+#endif
+
     /* Remove applications. */
-    // TODO:
+    for (i = 0; i < number_of_apps_to_remove; ++i) {
+        ret = removeapp(app_ids_to_remove[i]);
+        
+        if (ret == app_ids_to_remove[i]) {
+            app_ids_removed[number_of_apps_removed++] = ret;
+        } else if (ret == -1) {
+            printf(DEBUG_PREFIX"Could not remove application %d.\n",
+                   app_ids_to_remove[i]);
+        } else {
+            printf(DEBUG_PREFIX"Removed wrong application: %d.\n", ret);
+        }
+    }
     
-    
+#ifdef DEBUG
+    printf(DEBUG_PREFIX"Removed %d applications: ", number_of_apps_removed);
+    for (i = 0; i < number_of_apps_to_remove; ++i) {
+        printf("%d ", app_ids_removed[i]);
+    }
+    printf("\n");
+    fflush(stdout);
+#endif
+
     /* Create a reply. */
     reply = dbus_message_new_method_return(msg);
     dbus_message_iter_init_append(reply, &args);
     
-    if (!dbus_message_iter_append_basic(&args, )) {
+    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32,
+                                        &number_of_apps_removed)) {
         fprintf(stderr, DEBUG_PREFIX"dbus: out of memory.\n");
     }
-    // TODO: append arguments
     
+    dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "u", &arrayIter);
+
+    dbus_int32_t *v_ARRAY = app_ids_removed;
+    if (!dbus_message_iter_append_fixed_array (&arrayIter, DBUS_TYPE_UINT32, &v_ARRAY, number_of_apps_removed)) {
+        fprintf (stderr, "No memory!\n");
+    }
+    
+    dbus_message_iter_close_container(&args, &arrayIter);
     
     /* Send the reply. */
     if (!dbus_connection_send(conn, reply, &serial)) {
@@ -543,8 +584,8 @@ void listen() {
         else if (dbus_message_is_method_call(msg, "appman.method.Type", "lockscreen")) {
             lockscreen();
         } 
-        else if (dbus_message_is_method_call(msg, "appman.method.Type", "removeapps")) {
-            removeapps(msg, conn);
+        else if (dbus_message_is_method_call(msg, "appman.method.Type", "uninstallapps")) {
+            uninstallapps(msg, conn);
         }
 #ifdef DEBUG
         else {

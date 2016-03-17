@@ -77,6 +77,12 @@ pid_t run (const char *, const char *);
 int json_to_application (char *, int);
 
 /*
+ * Remove application files from system. (i.e. manifest, binary)
+ * Returns removed application id, -1 if unsuccessful.
+ */
+int removeapp(int app_id);
+
+/*
  * Reads application list from manifest directory.
  * Returns 0 if success.
  */
@@ -96,14 +102,14 @@ int runapp (int);
  * ---------------------
  * startapp: Start application.
  * listapps: Return applications.
- * removeapps: Remove applications from system.
+ * uninstallapps: Remove applications from system.
  * login: Bypass 'login' if 'success' access code received.
  * updateapps: Update application list.
  * lockscreen: Run 'login' application that asks pin.
  */
 void startapp (DBusMessage*, DBusConnection*);
 void listapps (DBusMessage*, DBusConnection*);
-void removeapps(DBusMessage* msg, DBusConnection* conn);
+void uninstallapps(DBusMessage* msg, DBusConnection* conn);
 void login (DBusMessage* msg);
 void updateapps();
 void lockscreen();

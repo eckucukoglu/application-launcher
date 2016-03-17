@@ -287,9 +287,136 @@ void query_listapps() {
     dbus_connection_unref(conn);
 }
 
-void query_removeapps(int* apps, int size) {
-    // TODO:
+void query_uninstallapps(unsigned int* app_ids, int size) {
+    DBusMessage* msg;
+    DBusMessageIter args, arrayIter;
+    DBusConnection* conn;
+    DBusError err;
+    DBusPendingCall* pending;
+    dbus_uint32_t *v_ARRAY;
+    int ret, i;
+    unsigned int removed_app_ids[MAX_NUMBER_APPLICATIONS];
+    int number_of_removed_apps = 0;
 
+    // initialiset the errors
+    dbus_error_init(&err);
+
+    // connect to the session bus and check for errors
+    conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
+    if (dbus_error_is_set(&err)) { 
+        fprintf(stderr, DEBUG_PREFIX"dbus: connection error: %s.\n", err.message); 
+        dbus_error_free(&err);
+    }
+    
+    if (!conn) { 
+        printf(DEBUG_PREFIX"dbus: null connection.\n");
+        exit(1); 
+    }
+
+    // request our name on the bus
+    ret = dbus_bus_request_name(conn, "appman.method.view", 
+                                DBUS_NAME_FLAG_REPLACE_EXISTING , &err);
+    
+    if (dbus_error_is_set(&err)) { 
+        fprintf(stderr, DEBUG_PREFIX"dbus: name error: %s.\n", err.message); 
+        dbus_error_free(&err);
+    }
+    
+    if (DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER != ret && 
+        DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER != ret) { 
+        printf(DEBUG_PREFIX"dbus: name owner error.\n");
+        exit(1);
+    }
+
+    // create a new method call and check for errors
+    msg = dbus_message_new_method_call("appman.method.server", // target for the method call
+                                      "/appman/method/Object", // object to call on
+                                      "appman.method.Type", // interface to call on
+                                      "uninstallapps"); // method name
+                  
+    if (!msg) { 
+        fprintf(stderr, DEBUG_PREFIX"dbus: null message.\n");
+        exit(1);
+    }
+
+    // append arguments
+    dbus_message_iter_init_append(msg, &args);
+    if (!dbus_message_iter_append_basic(&args, DBUS_TYPE_UINT32, &size)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: out of memory.\n"); 
+        exit(1);
+    }
+    
+    dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "u", &arrayIter);
+
+    v_ARRAY = app_ids;
+    if (!dbus_message_iter_append_fixed_array (&arrayIter, DBUS_TYPE_UINT32, &v_ARRAY, size)) {
+        fprintf (stderr, "No memory!\n");
+    }
+    
+    dbus_message_iter_close_container(&args, &arrayIter);
+    
+    // send message and get a handle for a reply
+    if (!dbus_connection_send_with_reply (conn, msg, &pending, -1)) { // -1 is default timeout
+        fprintf(stderr, DEBUG_PREFIX"dbus: out of memory.\n"); 
+        exit(1);
+    }
+    
+    if (NULL == pending) { 
+        fprintf(stderr, DEBUG_PREFIX"dbus: null pending call.\n"); 
+        exit(1); 
+    }
+    
+    dbus_connection_flush(conn);
+
+    // free message
+    dbus_message_unref(msg);
+
+    // block until we recieve a reply
+    dbus_pending_call_block(pending);
+
+    // get the reply message
+    msg = dbus_pending_call_steal_reply(pending);
+    if (NULL == msg) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: null reply.\n"); 
+        exit(1); 
+    }
+    
+    // free the pending message handle
+    dbus_pending_call_unref(pending);
+
+    assert_dbus_method_return(msg);
+
+    // read the parameters
+    if (!dbus_message_iter_init(msg, &args)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: message has no arguments.\n"); 
+    } else if (DBUS_TYPE_UINT32 != dbus_message_iter_get_arg_type(&args)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: argument is not integer.\n"); 
+    } else
+        dbus_message_iter_get_basic(&args, &number_of_removed_apps);
+    
+    if (!dbus_message_iter_next(&args)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: message has too few arguments.\n"); 
+    } else if (DBUS_TYPE_ARRAY != dbus_message_iter_get_arg_type(&args)) {
+        fprintf(stderr, DEBUG_PREFIX"dbus: argument is not array.\n"); 
+    } else {
+        dbus_message_iter_recurse(&args, &arrayIter);
+        for (i = 0; i < number_of_removed_apps; ++i) {
+            if (DBUS_TYPE_UINT32 == dbus_message_iter_get_arg_type(&arrayIter)) {
+                dbus_message_iter_get_basic(&arrayIter, removed_app_ids+i);
+            }
+        
+            dbus_message_iter_next(&arrayIter);
+        } 
+    }
+    
+    printf(DEBUG_PREFIX"Removed %d applications: ", number_of_removed_apps);
+    for (i = 0; i < number_of_removed_apps; i++) {
+        printf("%d ", removed_app_ids[i]);
+    }
+    printf("\n");
+    
+    dbus_message_unref(msg);
+    dbus_connection_unref(conn);
 }
 
 void query_login(int access_code) {
@@ -484,14 +611,14 @@ int main(int argc, char** argv) {
             query_startapp(atoi(argv[2]));
         else if (strcmp(argv[1], "listapps") == 0)
             query_listapps();
-        else if (strcmp(argv[1], "removeapps") == 0) {
+        else if (strcmp(argv[1], "uninstallapps") == 0) {
             int i, size = 4;
-            int* apps_to_remove = malloc(sizeof(int) * size);
+            unsigned int* apps_to_remove = malloc(sizeof(unsigned int) * size);
             for (i = 0; i < size; i++) {
                 apps_to_remove[i] = 100 + (i * size);
             }        
         
-            query_removeapps(apps_to_remove, size);
+            query_uninstallapps(apps_to_remove, size);
             free(apps_to_remove);
         }
         else if (strcmp(argv[1], "login") == 0)
@@ -501,11 +628,13 @@ int main(int argc, char** argv) {
         else if (strcmp(argv[1], "lockscreen") == 0)
             query_lockscreen();
         else {
-            printf ("Syntax: %s [startapp|listapps|removeapps| \
-                    login|updateapps|lockscreen|] [<param>]\n", argv[0]);
-            return 1;
+            goto USAGE;
         }    
     
+    } else {
+USAGE:  printf ("Usage: %s [startapp|listapps|uninstallapps|"
+                "login|updateapps|lockscreen] [<param>]\n", argv[0]);
+        return 1;
     }
 
     return 0;
