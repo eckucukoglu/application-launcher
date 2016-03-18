@@ -157,10 +157,62 @@ int json_to_application (char *text, int index) {
     return 0;
 }
 
-int removeapp(int app_id) {
-    // TODO:
+int removefile (char* filepath) {
+    int ret = remove(filepath);
+    
+    if (ret == 0) {
+#ifdef DEBUG
+        printf(DEBUG_PREFIX"%s deleted successfully.\n", filepath);
+        fflush(stdout);
+#endif    
+    } else {
+        fprintf(stderr, DEBUG_PREFIX"Error deleting the file %s.\n", filepath);
+        fflush(stderr);
+    }
+    
+    return ret;
+}
 
-    return app_id;
+int removeapp(int app_id) {
+    int i;
+    
+    for (i = 0; i < number_of_applications; i++) {
+        if (APPLIST[i].id == app_id) {
+            int retval;
+            char *manifest_filepath;
+            char app_id_str[4];
+            int pathname_length;
+            
+            sprintf(app_id_str, "%d", app_id);
+            pathname_length = strlen(MANIFEST_DIR) + 
+                              strlen(app_id_str) + 
+                              strlen(".mf") + 1;
+            manifest_filepath = malloc(pathname_length);
+            
+            strcpy(manifest_filepath, MANIFEST_DIR);
+            strcat(manifest_filepath, app_id_str);
+            strcat(manifest_filepath, ".mf");
+            
+            if (removefile(manifest_filepath) == 0 && 
+                removefile(APPLIST[i].path) == 0) {
+#ifdef DEBUG
+                printf(DEBUG_PREFIX"%s uninstalled.\n", APPLIST[i].prettyname);
+                fflush(stdout);
+#endif 
+                retval = app_id;
+            } else {
+#ifdef DEBUG
+                printf(DEBUG_PREFIX"%s could not uninstalled.\n", APPLIST[i].prettyname);
+                fflush(stdout);
+#endif 
+                retval = -1;
+            }
+            
+            return retval;
+        }
+    }
+
+    return -1;
 }
 
 int get_applist() {
@@ -435,9 +487,16 @@ void uninstallapps(DBusMessage* msg, DBusConnection* conn) {
         }
     }
     
+    if (number_of_apps_removed != 0) {
+        number_of_applications = 0;
+        if (get_applist()) {
+            handle_error("get_applist");
+        }
+    }
+    
 #ifdef DEBUG
     printf(DEBUG_PREFIX"Removed %d applications: ", number_of_apps_removed);
-    for (i = 0; i < number_of_apps_to_remove; ++i) {
+    for (i = 0; i < number_of_apps_removed; ++i) {
         printf("%d ", app_ids_removed[i]);
     }
     printf("\n");

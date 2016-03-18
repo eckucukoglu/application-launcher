@@ -15,7 +15,7 @@ It serves various D-Bus methods:
 Currently, maximum number for live applications is only 1, it is a restriction for a spesific embedded linux project. It means that in case of any UI (Qt) application ends, **appmand-view** will be run by appmand. 
 
 ### Manifest files:
-Manifests are basically define the application. Default manifest path is **/etc/appmand/**. Manifest files (*.mf) are in json format and each application needs its own manifest file. Applications have a unique unsigned integer value as **id**.
+Manifests are basically define the application. Default manifest path is **/etc/appmand/**. Manifest files (<application-id>.mf) are in json format and each application needs its own manifest file. Applications have a unique unsigned integer value as **id**.
 ```
 {
 	"id":	115,

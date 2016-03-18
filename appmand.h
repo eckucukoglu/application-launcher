@@ -76,6 +76,9 @@ pid_t run (const char *, const char *);
  */
 int json_to_application (char *, int);
 
+/* Removes filepath. Returns 0 if success. */
+int removefile (char* filepath);
+
 /*
  * Remove application files from system. (i.e. manifest, binary)
  * Returns removed application id, -1 if unsuccessful.
