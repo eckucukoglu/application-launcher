@@ -726,6 +726,9 @@ void status_handler(int pid, int status) {
     if (pid == view_pid) {
         /* Then restart appman view. */
         view_pid = run(system_apps[VIEW][0], system_apps[VIEW][1]);
+    } else if (pid == login_pid) {  
+        /* Then restart appman login. */
+        login_pid = run(system_apps[LOGIN][0], system_apps[LOGIN][1]);
     } else {
         for (i = 0; i < number_of_live_applications; i++) {
             /* Find which running app has changed its states. */
