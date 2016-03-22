@@ -2,20 +2,20 @@
 
 appmand is a daemon to control application spesific jobs for linux distributions. appmand lists system applications, runs them, signals them to stop or continue. Uses cgroups to assign them to arranged groups. Moreover appmand does binary hash checks with sha256 algorithm to validate binary integrity.
 
-System has mandatory access control rules to protect **application manifests**, which can only be accessible by appmand. So that other applications that want to lists, run or access applications have to request corresponding d-bus methods. appmand has 2 additional ui applications: **appmand-login** and **appmand-view**. Former is used to lock screen, and latter is basic launcher.
+System has mandatory access control rules to protect **application manifests**, which can only be accessible by appmand. So that other applications that want to list, run or access applications have to request corresponding d-bus methods. appmand has 2 additional ui applications: **appmand-login** and **appmand-view**. Former is used to lock screen, and latter is a basic launcher.
 
-It serves various D-Bus methods:
-  - startapp: Executes application.
+appmand serves various D-Bus methods:
+  - startapp: Execute application.
   - listapps: Return application list.
   - uninstallapps: Remove applications from system.
   - login: Bypass **appmand-login** if 'success' access code received.
   - updateapps: Update application list.
   - lockscreen: Switch **appmand-login** application that asks pin.
 
-Currently, maximum number for live applications is only 1, it is a restriction for a spesific embedded linux project. It means that in case of any UI (Qt) application ends, **appmand-view** will be run by appmand. 
+Currently, maximum number for live applications is only 1, it is a restriction for a spesific embedded linux project. It means that in case of any UI (Qt) application end, **appmand-view** will be run by appmand. 
 
 ### Manifest files:
-Manifests are basically define the application. Default manifest path is **/etc/appmand/**. Manifest files (<application-id>.mf) are in json format and each application needs its own manifest file. Applications have a unique unsigned integer value as **id**.
+Manifests are basically define the application. Default manifest path is **/etc/appmand/**. Manifest files ({application-id}.mf) are in json format and each application needs its own manifest file. Applications have a unique unsigned integer value as **id**.
 ```
 {
 	"id":	115,
@@ -42,7 +42,7 @@ Manifests are basically define the application. Default manifest path is **/etc/
 Makefile has 3 targets. These libraries are needed for successful compilation: -lm -lpthread -lcrypto -ldbus-1
  * default: compiles default **appmand**.
  * debug: compiles **appmand** which has lots of debug outputs.
- * tester: compiles **tester** for d-bus method requests.
+ * tester: compiles **tester** for d-bus method queries.
 ```
 make debug
 make tester
