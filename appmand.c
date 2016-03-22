@@ -7,7 +7,7 @@ pthread_cond_t child_exists = PTHREAD_COND_INITIALIZER;
 
 char* const system_apps[][2] = {
     { "/usr/bin/LoginScreen", "LoginScreen" },
-    { "/usr/bin/DesktopScreen", "DesktopScreen" }
+    { "/data/bin/DesktopScreen", "DesktopScreen" }
 };
 
 const char *reasonstr(int signal, int code) {
