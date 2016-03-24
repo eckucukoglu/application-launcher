@@ -67,7 +67,7 @@ bool application_integrity_check(int appindex) {
     return strcmp(hash, APPLIST[appindex].hash) == 0;
 }
 
-pid_t run (const char *path, const char *name) {
+pid_t run(const char *path, const char *name) {
     int rc;
     pid_t pid = fork();
 
@@ -89,6 +89,42 @@ pid_t run (const char *path, const char *name) {
     
     return pid;
 }
+
+int assign_control_group(pid_t pid, const char *group) {
+    if (strcmp(group, "none") == 0)
+        return 0;
+    
+    FILE *file;
+    char *group_tasks_path;
+    int pathname_length;
+    char pid_str[5];
+    
+    sprintf(pid_str, "%d", pid);
+
+    pathname_length = strlen(CGROUPS_VFS) + 
+                      strlen(group) + 
+                      strlen("/tasks") + 1;
+    group_tasks_path = malloc(pathname_length);
+    if (!group_tasks_path)
+        handle_error("malloc for group_tasks_path");
+    
+    strcpy(group_tasks_path, CGROUPS_VFS);
+    strcat(group_tasks_path, group);
+    strcat(group_tasks_path, "/tasks");
+    
+    file = fopen(group_tasks_path, "r+");
+    
+    if (!file)
+        return -1;
+    
+    if(fputs(pid_str, file) < 0)
+        return -1;
+    
+    if (group_tasks_path) free(group_tasks_path);
+    fclose(file);
+    return 0;
+}
+
 
 int json_to_application (char *text, int index) {
     cJSON *root, *child;
@@ -188,7 +224,9 @@ int removeapp(int app_id) {
                               strlen(app_id_str) + 
                               strlen(".mf") + 1;
             manifest_filepath = malloc(pathname_length);
-            
+            if (!manifest_filepath)
+                handle_error("malloc for manifest_filepath");
+                
             strcpy(manifest_filepath, MANIFEST_DIR);
             strcat(manifest_filepath, app_id_str);
             strcat(manifest_filepath, ".mf");
@@ -208,6 +246,8 @@ int removeapp(int app_id) {
                 retval = -1;
             }
             
+            if (manifest_filepath)
+                free(manifest_filepath);
             return retval;
         }
     }
@@ -281,7 +321,7 @@ int get_applist() {
 }
 
 int runapp (int appid) {
-    int i, appindex = -1;
+    int i, appindex = -1, ret;
 
     if (number_of_live_applications >= MAX_NUMBER_LIVE_APPLICATIONS) {
 #ifdef DEBUG
@@ -299,8 +339,13 @@ int runapp (int appid) {
         }
     }
     
-    if (appindex == -1)
+    if (appindex == -1) {
+#ifdef DEBUG
+        printf(DEBUG_PREFIX"Application id (%d) does not exists.\n", appid);
+        fflush(stdout);
+#endif
         return -2;
+    }
 
     if (!application_integrity_check(appindex)) {
         printf(DEBUG_PREFIX"Integrity check failed.\n");    
@@ -308,6 +353,14 @@ int runapp (int appid) {
     }
 
     pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
+    ret = assign_control_group(pid, APPLIST[appindex].group);
+#ifdef DEBUG
+    if (ret != 0) {
+        printf(DEBUG_PREFIX"Control group assignment failed for %s.\n", 
+                APPLIST[appindex].prettyname);
+        fflush(stdout);
+    }
+#endif   
     signal_sender(view_pid, SIGSTOP, VIEW);
 
     APPLIST[appindex].pid = pid;
@@ -838,9 +891,8 @@ int main (int argc, char *argv[]) {
 
     /* Memory allocation for thread arguments */
     tinfo = malloc(sizeof(thread_info) * NUMBER_OF_THREADS);
-    if (tinfo == NULL) {
+    if (!tinfo)
         handle_error("malloc for thread_info");
-    }
 
     /* Fill application list. */
     rc = get_applist();

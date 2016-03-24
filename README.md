@@ -18,13 +18,13 @@ Currently, maximum number for live applications is only 1, it is a restriction f
 Manifests are basically define the application. Default manifest path is **/etc/appmand/**. Manifest files ({application-id}.mf) are in json format and each application needs its own manifest file. Applications have a unique unsigned integer value as **id**.
 ```
 {
-	"id":	115,
-	"path":	"/usr/bin/gnome-calculator",
-	"name":	"gnome-calculator",
-	"group":	"group01",
-	"prettyname":	"Calculator",
-	"icon":	"Calculator.png",
-	"hash":	"40bfb3b6565739ef668ff4d33e9cabd3f107a21d37d97f82646145bec5a89641"
+	"id":   115,
+	"path": "/usr/bin/gnome-calculator",
+	"name": "gnome-calculator",
+	"group":    "none",
+	"prettyname":   "Calculator",
+	"icon": "Calculator.png",
+	"hash": "40bfb3b6565739ef668ff4d33e9cabd3f107a21d37d97f82646145bec5a89641"
 }
 ```
 
@@ -32,7 +32,7 @@ Manifests are basically define the application. Default manifest path is **/etc/
  * id           : application id.
  * path         : execution path.
  * name         : application binary name.
- * group        : cgroups group name.
+ * group        : control group name.
  * prettyname   : pretty application name.
  * icon         : application icon.
  * hash         : sha256 binary hash.

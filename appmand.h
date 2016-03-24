@@ -19,6 +19,7 @@
 #define MAX_NUMBER_APPLICATIONS 50 /* Maximum number of applications. */
 #define MAX_NUMBER_LIVE_APPLICATIONS 1 /* Maximum number of running applications. */
 #define MANIFEST_DIR "/etc/appmand/" /* Manifest storage. */
+#define CGROUPS_VFS "/sys/fs/cgroup/" /* Cgroups virtual filesystem path. */
 
 #define DEBUG_PREFIX "appmand: "
 
@@ -67,16 +68,19 @@ const char *reasonstr(int, int);
 /* Compares binary sha256 hash w/ manifest hash value. */
 bool application_integrity_check(int);
 
-/* Forks, execs and returns pid of a child. */
+/* Fork, exec and return pid of a child. */
 pid_t run (const char *, const char *);
+
+/* Assign process to group. Return 0 if success, -1 otherwise. */
+int assign_control_group(pid_t, const char *);
 
 /*
  * Convert json data to application structure.
- * Returns 0 if success.
+ * Return 0 if success.
  */
-int json_to_application (char *, int);
+int json_to_application(char *, int);
 
-/* Removes filepath. Returns 0 if success. */
+/* Remove filepath. Returns 0 if success. */
 int removefile (char* filepath);
 
 /*
@@ -95,10 +99,10 @@ int get_applist();
  * Runs application with the given id.
  * Returns 0 if success.
  *        -1 if reached maximum number of live apps.
- *        -2 if application index does not exists.
+ *        -2 if application id does not exists.
  *        -3 if integrity check fails.
  */
-int runapp (int);
+int runapp(int);
 
 /*
  * DBUS METHODS TO SERVE
