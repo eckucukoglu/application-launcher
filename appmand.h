@@ -20,6 +20,7 @@
 #define MAX_NUMBER_LIVE_APPLICATIONS 1 /* Maximum number of running applications. */
 #define MANIFEST_DIR "/etc/appmand/" /* Manifest storage. */
 #define CGROUPS_VFS "/sys/fs/cgroup/" /* Cgroups virtual filesystem path. */
+#define SOBERSTORE_APP_ID 0 /* Soberstore application id. */
 
 #define DEBUG_PREFIX "appmand: "
 
@@ -29,7 +30,7 @@
         do { perror(msg); exit(EXIT_FAILURE); } while (0);
 
 typedef enum { false, true } bool;
-enum { LOGIN, VIEW };
+enum { LOGIN, VIEW, SOBERSTORE };
 
 /*
  * Thread information.
@@ -79,6 +80,14 @@ int assign_control_group(pid_t, const char *);
  * Return 0 if success.
  */
 int json_to_application(char *, int);
+
+/**
+ * Some applications should be served to UI even they don't have manifest. 
+ * Add system apps and return added application number.
+ * - Soberstore
+ * - ..
+ */
+int add_system_apps (int);
 
 /* Remove filepath. Returns 0 if success. */
 int removefile (char* filepath);

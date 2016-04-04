@@ -5,9 +5,11 @@ pthread_mutex_t mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 /* Means there exists children to wait. */
 pthread_cond_t child_exists = PTHREAD_COND_INITIALIZER;
 
-char* const system_apps[][2] = {
-    { "/usr/bin/LoginScreen", "LoginScreen" },
-    { "/data/bin/DesktopScreen", "DesktopScreen" }
+char* const system_apps[][3] = {
+    /* Path, name, hash. */
+    { "/usr/bin/LoginScreen", "LoginScreen", "" },
+    { "/usr/bin/DesktopScreen", "DesktopScreen", "" },
+    { "/usr/bin/Soberstore", "Soberstore", "" }
 };
 
 const char *reasonstr(int signal, int code) {
@@ -193,6 +195,20 @@ int json_to_application (char *text, int index) {
     return 0;
 }
 
+int add_system_apps (int index) {
+    /* Soberstore. */
+    APPLIST[index].id = SOBERSTORE_APP_ID;
+    APPLIST[index].path = system_apps[SOBERSTORE][0];
+    APPLIST[index].name = system_apps[SOBERSTORE][1];
+    APPLIST[index].group = "none";
+    APPLIST[index].prettyname = system_apps[SOBERSTORE][1];
+    APPLIST[index].icon = "";
+    APPLIST[index].hash = system_apps[SOBERSTORE][2];
+    APPLIST[index].pid = -1;
+    
+    return 1;
+}
+        
 int removefile (char* filepath) {
     int ret = remove(filepath);
     
@@ -211,6 +227,10 @@ int removefile (char* filepath) {
 
 int removeapp(int app_id) {
     int i;
+    
+    // Do not remove Soberstore application.
+    if (app_id == SOBERSTORE_APP_ID)
+        return -1;
     
     for (i = 0; i < number_of_applications; i++) {
         if (APPLIST[i].id == app_id) {
@@ -307,7 +327,11 @@ int get_applist() {
         
         if (json_to_application(filecontent, number_of_applications) == 0)
             number_of_applications++;
-
+    
+        ret = add_system_apps(number_of_applications);
+        if (ret > 0)
+            number_of_applications += ret;
+        
         free(filecontent);
         fclose(file);
     }
@@ -347,10 +371,12 @@ int runapp (int appid) {
         return -2;
     }
 
-    if (!application_integrity_check(appindex)) {
-        printf(DEBUG_PREFIX"Integrity check failed.\n");    
-        return -3;
-    }
+    // FIX: Temporarily, do not integrity check for Soberstore
+    if (appid != SOBERSTORE_APP_ID)
+        if (!application_integrity_check(appindex)) {
+            printf(DEBUG_PREFIX"Integrity check failed.\n");    
+            return -3;
+        }
 
     pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
     ret = assign_control_group(pid, APPLIST[appindex].group);
