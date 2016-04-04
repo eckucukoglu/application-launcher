@@ -328,13 +328,13 @@ int get_applist() {
         if (json_to_application(filecontent, number_of_applications) == 0)
             number_of_applications++;
     
-        ret = add_system_apps(number_of_applications);
-        if (ret > 0)
-            number_of_applications += ret;
-        
         free(filecontent);
         fclose(file);
     }
+    
+    ret = add_system_apps(number_of_applications);
+    if (ret > 0)
+        number_of_applications += ret;
 
     /* Close the directory. */
     if (closedir (d)) {
