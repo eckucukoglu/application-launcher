@@ -115,7 +115,12 @@ int assign_control_group(pid_t pid, const char *group) {
     strcat(group_tasks_path, "/tasks");
     
     file = fopen(group_tasks_path, "r+");
-    
+#ifdef DEBUG
+    if (file) {
+        printf(DEBUG_PREFIX"%s valid path.\n", group_tasks_path);
+        fflush(stdout);
+    }
+#endif
     if (!file)
         return -1;
     
@@ -196,6 +201,14 @@ int json_to_application (char *text, int index) {
 }
 
 int add_system_apps (int index) {
+    int i;
+    
+    // check existence
+    for (i = 0; i < index; i++) {
+        if (APPLIST[i].id == SOBERSTORE_APP_ID)
+            return 0;
+    }
+    
     /* Soberstore. */
     APPLIST[index].id = SOBERSTORE_APP_ID;
     APPLIST[index].path = system_apps[SOBERSTORE][0];
@@ -381,11 +394,9 @@ int runapp (int appid) {
     pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
     ret = assign_control_group(pid, APPLIST[appindex].group);
 #ifdef DEBUG
-    if (ret != 0) {
-        printf(DEBUG_PREFIX"Control group assignment failed for %s.\n", 
-                APPLIST[appindex].prettyname);
-        fflush(stdout);
-    }
+    printf(DEBUG_PREFIX"Cgroup assignment(%s)->%s: %d.\n", 
+            APPLIST[appindex].prettyname, APPLIST[appindex].group, ret);
+    fflush(stdout);
 #endif   
     signal_sender(view_pid, SIGSTOP, VIEW);
 
