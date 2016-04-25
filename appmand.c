@@ -391,14 +391,15 @@ int runapp (int appid) {
             return -3;
         }
 
+    signal_sender(view_pid, /*SIGSTOP*/SIGKILL, VIEW);
+    
     pid_t pid = run(APPLIST[appindex].path, APPLIST[appindex].name);
     ret = assign_control_group(pid, APPLIST[appindex].group);
 #ifdef DEBUG
     printf(DEBUG_PREFIX"Cgroup assignment(%s)->%s: %d.\n", 
             APPLIST[appindex].prettyname, APPLIST[appindex].group, ret);
     fflush(stdout);
-#endif   
-    signal_sender(view_pid, SIGSTOP, VIEW);
+#endif  
 
     APPLIST[appindex].pid = pid;
     LIVEAPPS[number_of_live_applications] = &APPLIST[appindex];
@@ -815,7 +816,7 @@ void status_handler(int pid, int status) {
     
     if (pid == view_pid) {
         /* Then restart appman view. */
-        view_pid = run(system_apps[VIEW][0], system_apps[VIEW][1]);
+        //view_pid = run(system_apps[VIEW][0], system_apps[VIEW][1]);
     } else if (pid == login_pid) {  
         /* Then restart appman login. */
         login_pid = run(system_apps[LOGIN][0], system_apps[LOGIN][1]);
@@ -832,7 +833,6 @@ void status_handler(int pid, int status) {
                 break;
             }
         }
-        
         signal_sender(view_pid, SIGCONT, VIEW);
     }
 }
